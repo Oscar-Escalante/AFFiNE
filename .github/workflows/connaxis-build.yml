@@ -83,6 +83,7 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
           SENTRYCLI_SKIP_DOWNLOAD: '1'
+          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
 
       - name: Set version
         run: ./scripts/set-version.sh 0.0.0-connaxis
