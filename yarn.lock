@@ -3989,6 +3989,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@connaxis/brand@workspace:*, @connaxis/brand@workspace:packages/brand":
+  version: 0.0.0-use.local
+  resolution: "@connaxis/brand@workspace:packages/brand"
+  languageName: unknown
+  linkType: soft
+
 "@ctrl/tinycolor@npm:^4.1.0":
   version: 4.1.0
   resolution: "@ctrl/tinycolor@npm:4.1.0"
