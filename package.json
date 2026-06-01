@@ -7,6 +7,7 @@
   "workspaces": [
     ".",
     "blocksuite/**/*",
+    "packages/brand",
     "packages/*/*",
     "packages/frontend/apps/*",
     "tools/*",

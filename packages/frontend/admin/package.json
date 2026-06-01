@@ -3,6 +3,7 @@
   "version": "0.26.3",
   "private": true,
   "dependencies": {
+    "@connaxis/brand": "workspace:*",
     "@affine/component": "workspace:*",
     "@affine/core": "workspace:*",
     "@affine/error": "workspace:*",
