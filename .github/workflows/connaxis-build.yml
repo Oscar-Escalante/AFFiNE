@@ -86,7 +86,7 @@ jobs:
           YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
 
       - name: Set version
-        run: ./scripts/set-version.sh 0.0.0-connaxis
+        run: ./scripts/set-version.sh 0.26.3-connaxis
 
       - name: Build web
         run: node_modules/.bin/affine bundle -p web
@@ -142,7 +142,7 @@ jobs:
           SENTRYCLI_SKIP_DOWNLOAD: '1'
 
       - name: Set version
-        run: ./scripts/set-version.sh 0.0.0-connaxis
+        run: ./scripts/set-version.sh 0.26.3-connaxis
 
       - name: Create placeholder arm native files
         run: |
@@ -220,7 +220,7 @@ jobs:
         run: mv ./node_modules ./packages/backend/server/
 
       - name: Set version
-        run: ./scripts/set-version.sh 0.0.0-connaxis
+        run: ./scripts/set-version.sh 0.26.3-connaxis
 
       - name: Login to GHCR
         uses: docker/login-action@v3
