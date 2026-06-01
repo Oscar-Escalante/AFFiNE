@@ -192,7 +192,10 @@ jobs:
           path: packages/backend/native
 
       - name: Create empty mobile dist (not needed for web-only)
-        run: mkdir -p packages/frontend/apps/mobile/dist
+        run: |
+          mkdir -p packages/frontend/apps/mobile/dist
+          echo '{"js":[],"css":[],"publicPath":"/","gitHash":"","description":""}' \
+            > packages/frontend/apps/mobile/dist/assets-manifest.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
