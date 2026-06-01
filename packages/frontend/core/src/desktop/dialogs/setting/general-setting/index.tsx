@@ -7,7 +7,6 @@ import {
   AppearanceIcon,
   ExperimentIcon,
   FolderIcon,
-  InformationIcon,
   KeyboardIcon,
   MeetingIcon,
   NotificationIcon,
@@ -18,7 +17,6 @@ import { useEffect, useMemo } from 'react';
 
 import { AuthService, ServerService } from '../../../../modules/cloud';
 import type { SettingSidebarItem, SettingState } from '../types';
-import { AboutAffine } from './about';
 import { AppearanceSettings } from './appearance';
 import { BackupSettingPanel } from './backup';
 import { BillingSettings } from './billing';
@@ -140,12 +138,6 @@ export const useGeneralSettingList = (): GeneralSettingList => {
         title: t['com.affine.settings.workspace.experimental-features'](),
         icon: <ExperimentIcon />,
         testId: 'experimental-features-trigger',
-      },
-      {
-        key: 'about',
-        title: t['com.affine.aboutAFFiNE.title'](),
-        icon: <InformationIcon />,
-        testId: 'about-panel-trigger',
       }
     );
     return settings;
@@ -178,8 +170,6 @@ export const GeneralSetting = ({
       return <AppearanceSettings />;
     case 'meetings':
       return <MeetingsSettings />;
-    case 'about':
-      return <AboutAffine />;
     case 'plans':
       return <AFFiNEPricingPlans />;
     case 'billing':

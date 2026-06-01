@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import logoUrl from '../assets/logo.svg';
+import logoUrl from '../assets/logo.png';
 
 /** Horizontal logo — use where AFFiNE showed its text logo (149×48 slot) */
 export const Logo = memo(function Logo() {
