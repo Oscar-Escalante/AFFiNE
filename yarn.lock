@@ -242,10 +242,10 @@ __metadata:
     "@affine/nbstore": "workspace:*"
     "@affine/track": "workspace:*"
     "@blocksuite/affine": "workspace:*"
-    "@capacitor/android": "npm:^7.0.0"
+    "@capacitor/android": "npm:^8.0.0"
     "@capacitor/app": "npm:^7.0.0"
-    "@capacitor/cli": "npm:^7.6.5"
-    "@capacitor/core": "npm:^7.0.0"
+    "@capacitor/cli": "npm:^8.0.0"
+    "@capacitor/core": "npm:^8.0.0"
     "@capacitor/keyboard": "npm:^7.0.0"
     "@capacitor/status-bar": "npm:^7.0.0"
     "@capgo/inappbrowser": "npm:^8.0.0"
@@ -668,10 +668,10 @@ __metadata:
     "@blocksuite/affine": "workspace:*"
     "@capacitor/app": "npm:^7.0.0"
     "@capacitor/browser": "npm:^7.0.0"
-    "@capacitor/cli": "npm:^7.6.5"
-    "@capacitor/core": "npm:^7.0.0"
+    "@capacitor/cli": "npm:^8.0.0"
+    "@capacitor/core": "npm:^8.0.0"
     "@capacitor/haptics": "npm:^7.0.0"
-    "@capacitor/ios": "npm:^7.0.0"
+    "@capacitor/ios": "npm:^8.0.0"
     "@capacitor/keyboard": "npm:^7.0.0"
     "@toeverything/infra": "workspace:^"
     "@types/react": "npm:^19.0.1"
@@ -723,7 +723,7 @@ __metadata:
   resolution: "@affine/mobile-shared@workspace:packages/frontend/apps/mobile-shared"
   dependencies:
     "@affine/core": "workspace:*"
-    "@capacitor/core": "npm:^7.0.0"
+    "@capacitor/core": "npm:^8.0.0"
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.0.18"
   languageName: unknown
@@ -754,7 +754,7 @@ __metadata:
   resolution: "@affine/monorepo@workspace:."
   dependencies:
     "@affine-tools/cli": "workspace:*"
-    "@capacitor/cli": "npm:^7.6.5"
+    "@capacitor/cli": "npm:^8.0.0"
     "@eslint/js": "npm:^9.39.2"
     "@faker-js/faker": "npm:^10.1.0"
     "@istanbuljs/schema": "npm:^0.1.3"
@@ -3529,12 +3529,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@capacitor/android@npm:^7.0.0":
-  version: 7.4.5
-  resolution: "@capacitor/android@npm:7.4.5"
+"@capacitor/android@npm:^8.0.0":
+  version: 8.3.4
+  resolution: "@capacitor/android@npm:8.3.4"
   peerDependencies:
-    "@capacitor/core": ^7.4.0
-  checksum: 10/c960f3dae60ab8d1b9a1848af72741dc05eca246399426eea32e36915696d42e29d82be0ddf350f3edd92b235cd58d03705ae00a38a25edbc410290ae8f44702
+    "@capacitor/core": ^8.3.0
+  checksum: 10/9d16e90136e51ff1ad3801653863084f82e8de21dd4c289a12cfd2b1d46d48ab08458cd75942d2692d2dfeb3538dd13819d50ec2782eed5eab82045a199a5074
   languageName: node
   linkType: hard
 
@@ -3556,9 +3556,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@capacitor/cli@npm:^7.6.5":
-  version: 7.6.5
-  resolution: "@capacitor/cli@npm:7.6.5"
+"@capacitor/cli@npm:^8.0.0":
+  version: 8.3.4
+  resolution: "@capacitor/cli@npm:8.3.4"
   dependencies:
     "@ionic/cli-framework-output": "npm:^2.2.8"
     "@ionic/utils-subprocess": "npm:^3.0.1"
@@ -3580,16 +3580,16 @@ __metadata:
   bin:
     cap: bin/capacitor
     capacitor: bin/capacitor
-  checksum: 10/a937d30396360fc0ab47d73c2a43ee7c6bbf203f22f0691022d460f41c66f875d1dd8bb2bc4b78e8fdd38144f2fe09374eeefdb623615b85cf89c79f799e2f47
+  checksum: 10/38d10aedb4921c1f243f348da53cce771fcfb42d63a3813fb53dcbc256cfb677cfc96745175f3dad63ee50bc2b2a455e98c725052587b7e162dc53d24cc892c2
   languageName: node
   linkType: hard
 
-"@capacitor/core@npm:^7.0.0":
-  version: 7.4.5
-  resolution: "@capacitor/core@npm:7.4.5"
+"@capacitor/core@npm:^8.0.0":
+  version: 8.3.4
+  resolution: "@capacitor/core@npm:8.3.4"
   dependencies:
     tslib: "npm:^2.1.0"
-  checksum: 10/22d83d386199b08e0ef7ee59bb44863b5aef89edeb40377deeabf7bf28cbaeded041677813dee58a6a585311ba9b3b82658336300d7239b663c5c4d499eda9ae
+  checksum: 10/ce81e9594a93268fcd0080400ec81ecdd5680ad7693f170e115a5b9d6b9e034d421755e13ea2bc69034d3d7c1b41e560c1f9500e8739ddaf2c15af7ccf0e8a03
   languageName: node
   linkType: hard
 
@@ -3602,12 +3602,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@capacitor/ios@npm:^7.0.0":
-  version: 7.4.5
-  resolution: "@capacitor/ios@npm:7.4.5"
+"@capacitor/ios@npm:^8.0.0":
+  version: 8.3.4
+  resolution: "@capacitor/ios@npm:8.3.4"
   peerDependencies:
-    "@capacitor/core": ^7.4.0
-  checksum: 10/248dafcd68ddd759e76da15fe4ce68654a9e39d12edda5f6cec071a9c33ae6508d10a777f789db906688f4baf0e83058cd04713e1e15132f38d8a13777672d43
+    "@capacitor/core": ^8.3.0
+  checksum: 10/93c3261c5a2ddf5b1040039f001a46ff2d6cd377ddc8a8a47a3a7c67739bb5220fd866e8fad7cf383e69157f8648f2dff705154bfc69bc2ee2a5e469d03120c0
   languageName: node
   linkType: hard
 
