@@ -87,6 +87,9 @@ jobs:
       - name: Set version
         run: ./scripts/set-version.sh 0.0.0-connaxis
 
+      - name: Add node_modules/.bin to PATH
+        run: echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> $GITHUB_PATH
+
       - name: Build web
         run: yarn workspace @affine/web build
         env:
@@ -142,6 +145,12 @@ jobs:
 
       - name: Set version
         run: ./scripts/set-version.sh 0.0.0-connaxis
+
+      - name: Create placeholder arm native files
+        run: |
+          touch packages/backend/native/server-native.node
+          touch packages/backend/native/server-native.arm64.node
+          touch packages/backend/native/server-native.armv7.node
 
       - name: Build server
         run: yarn workspace @affine/server build
