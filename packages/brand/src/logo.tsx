@@ -27,3 +27,20 @@ export const AppIcon = memo(function AppIcon() {
     />
   );
 });
+
+/** Navbar icon — use in the sidebar workspace selector (size prop in px, default 36) */
+export const NavbarIcon = memo(function NavbarIcon({
+  size = 36,
+}: {
+  size?: number;
+}) {
+  return (
+    <img
+      src={logoUrl}
+      alt="Connaxis"
+      width={size}
+      height={size}
+      style={{ objectFit: 'contain', display: 'block' }}
+    />
+  );
+});

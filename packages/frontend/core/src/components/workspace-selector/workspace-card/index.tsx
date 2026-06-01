@@ -28,10 +28,11 @@ import clsx from 'clsx';
 import type { HTMLAttributes } from 'react';
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 
+import { NavbarIcon } from '@connaxis/brand';
+
 import { useAsyncCallback } from '../../hooks/affine-async-hooks';
 import { useCatchEventCallback } from '../../hooks/use-catch-event-hook';
 import { useNavigateHelper } from '../../hooks/use-navigate-helper';
-import { WorkspaceAvatar } from '../../workspace-avatar';
 import * as styles from './styles.css';
 export { PureWorkspaceCard } from './pure-workspace-card';
 
@@ -327,15 +328,7 @@ export const WorkspaceCard = forwardRef<
       >
         <div className={clsx(styles.infoContainer, infoClassName)}>
           {information ? (
-            <WorkspaceAvatar
-              className={styles.avatar}
-              meta={workspaceMetadata}
-              rounded={3}
-              data-testid="workspace-avatar"
-              size={avatarSize}
-              name={name}
-              colorfulFallback
-            />
+            <NavbarIcon size={avatarSize} />
           ) : (
             <Skeleton width={avatarSize} height={avatarSize} />
           )}

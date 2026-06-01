@@ -7,7 +7,7 @@ import clsx from 'clsx';
 import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
 
-import { WorkspaceAvatar } from '../../workspace-avatar';
+import { NavbarIcon } from '@connaxis/brand';
 import * as styles from './styles.css';
 
 export const PureWorkspaceCard = forwardRef<
@@ -49,14 +49,7 @@ export const PureWorkspaceCard = forwardRef<
       >
         <div className={styles.infoContainer}>
           {information ? (
-            <WorkspaceAvatar
-              meta={workspaceMetadata}
-              rounded={3}
-              data-testid="workspace-avatar"
-              size={avatarSize}
-              name={name}
-              colorfulFallback
-            />
+            <NavbarIcon size={avatarSize} />
           ) : (
             <Skeleton width={avatarSize} height={avatarSize} />
           )}
