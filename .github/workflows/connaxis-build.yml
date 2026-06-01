@@ -87,16 +87,13 @@ jobs:
       - name: Set version
         run: ./scripts/set-version.sh 0.0.0-connaxis
 
-      - name: Add node_modules/.bin to PATH
-        run: echo "${GITHUB_WORKSPACE}/node_modules/.bin" >> $GITHUB_PATH
-
       - name: Build web
-        run: yarn workspace @affine/web build
+        run: node_modules/.bin/affine bundle -p web
         env:
           BUILD_TYPE: stable
 
       - name: Build admin
-        run: yarn workspace @affine/admin build
+        run: node_modules/.bin/affine bundle -p admin
         env:
           BUILD_TYPE: stable
 
