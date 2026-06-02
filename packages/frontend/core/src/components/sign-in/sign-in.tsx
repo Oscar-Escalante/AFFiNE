@@ -11,12 +11,8 @@ import { useAsyncCallback } from '@affine/core/components/hooks/affine-async-hoo
 import { AuthService, ServerService } from '@affine/core/modules/cloud';
 import type { AuthSessionStatus } from '@affine/core/modules/cloud/entities/session';
 import { ServerDeploymentType } from '@affine/graphql';
-import { Trans, useI18n } from '@affine/i18n';
-import {
-  ArrowRightBigIcon,
-  LocalWorkspaceIcon,
-  PublishIcon,
-} from '@blocksuite/icons/rc';
+import { useI18n } from '@affine/i18n';
+import { ArrowRightBigIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useService } from '@toeverything/infra';
 import { cssVar } from '@toeverything/theme';
 import {
@@ -194,48 +190,6 @@ export const SignInStep = ({
           </Button>
         </form>
 
-        {!isSelfhosted && (
-          <>
-            <div className={style.authMessage}>
-              {/*prettier-ignore*/}
-              <Trans i18nKey="com.affine.auth.sign.message">
-                By clicking &quot;Continue with Google/Email&quot; above, you acknowledge that
-                you agree to AFFiNE&apos;s <a href="https://affine.pro/terms" target="_blank" rel="noreferrer">Terms of Conditions</a> and <a href="https://affine.pro/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
-            </Trans>
-            </div>
-            <div className={style.skipDivider}>
-              <div className={style.skipDividerLine} />
-              <span className={style.skipDividerText}>or</span>
-              <div className={style.skipDividerLine} />
-            </div>
-            <div className={style.skipSection}>
-              {BUILD_CONFIG.isNative ? (
-                <Button
-                  variant="plain"
-                  className={style.addSelfhostedButton}
-                  prefix={
-                    <PublishIcon className={style.addSelfhostedButtonPrefix} />
-                  }
-                  onClick={onAddSelfhosted}
-                >
-                  {t['com.affine.auth.sign.add-selfhosted']()}
-                </Button>
-              ) : (
-                <div className={style.skipText}>
-                  {t['com.affine.mobile.sign-in.skip.hint']()}
-                </div>
-              )}
-              <Button
-                variant="plain"
-                onClick={onSkip}
-                className={style.skipLink}
-                prefix={<LocalWorkspaceIcon className={style.skipLinkIcon} />}
-              >
-                {t['com.affine.mobile.sign-in.skip.link']()}
-              </Button>
-            </div>
-          </>
-        )}
       </AuthContent>
       {isSelfhosted && (
         <AuthFooter>
