@@ -9,6 +9,8 @@ COPY ./packages/backend/server /app
 COPY ./packages/frontend/apps/web/dist /app/static
 COPY ./packages/frontend/admin/dist /app/static/admin
 COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
+# Use the Connaxis PNG as favicon.ico (PNG is accepted by all modern browsers)
+RUN cp /app/static/favicon-192.png /app/static/favicon.ico
 
 # Keep server sourcemap for stacktraces, but don't ship frontend/node_modules sourcemaps.
 ARG TARGETARCH
