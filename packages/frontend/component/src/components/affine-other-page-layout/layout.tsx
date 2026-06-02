@@ -1,3 +1,4 @@
+import { NavbarIcon } from '@connaxis/brand';
 import { useTheme } from 'next-themes';
 import { type ReactNode } from 'react';
 
@@ -24,7 +25,7 @@ export const AffineOtherPageLayout = ({
       ) : (
         <div className={styles.topNav}>
           <a href="/" rel="noreferrer" className={styles.affineLogo}>
-            <img src="/favicon-192.png" width={28} height={28} alt="Connaxis Wiki" />
+            <NavbarIcon size={28} />
           </a>
         </div>
       )}

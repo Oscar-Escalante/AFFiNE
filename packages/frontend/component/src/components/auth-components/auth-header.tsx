@@ -1,4 +1,4 @@
-import { Logo1Icon } from '@blocksuite/icons/rc';
+import { NavbarIcon } from '@connaxis/brand';
 import clsx from 'clsx';
 import type { FC } from 'react';
 
@@ -12,7 +12,7 @@ export const AuthHeader: FC<{
   return (
     <div className={clsx(authHeaderWrapper, className)}>
       <p>
-        <Logo1Icon className="logo" />
+        <NavbarIcon size={24} />
         {title}
       </p>
       <p>{subTitle}</p>
