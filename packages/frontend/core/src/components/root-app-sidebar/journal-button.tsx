@@ -3,7 +3,7 @@ import { DocDisplayMetaService } from '@affine/core/modules/doc-display-meta';
 import { JournalService } from '@affine/core/modules/journal';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import { useI18n } from '@affine/i18n';
-import { TodayIcon } from '@blocksuite/icons/rc';
+import { CalendarDotDuotone as TodayIcon } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService } from '@toeverything/infra';
 
 export const AppSidebarJournalButton = () => {

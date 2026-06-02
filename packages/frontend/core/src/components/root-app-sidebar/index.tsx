@@ -16,11 +16,11 @@ import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import type { Store } from '@blocksuite/affine/store';
 import {
-  AiOutlineIcon,
-  AllDocsIcon,
-  ImportIcon,
-  SettingsIcon,
-} from '@blocksuite/icons/rc';
+  FilesDuotone as AllDocsIcon,
+  GearSixDuotone as SettingsIcon,
+  DownloadSimpleDuotone as ImportIcon,
+  RobotDuotone as AiOutlineIcon,
+} from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
 import type { ReactElement } from 'react';
 import { memo, useCallback } from 'react';

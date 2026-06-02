@@ -8,7 +8,6 @@
     "./bootstrap": "./src/bootstrap/index.ts"
   },
   "dependencies": {
-    "@connaxis/brand": "workspace:*",
     "@affine/component": "workspace:*",
     "@affine/debug": "workspace:*",
     "@affine/electron-api": "workspace:*",
@@ -29,6 +28,7 @@
     "@blocksuite/global": "workspace:*",
     "@blocksuite/icons": "^2.2.17",
     "@blocksuite/std": "workspace:*",
+    "@connaxis/brand": "workspace:*",
     "@emotion/cache": "^11.14.0",
     "@emotion/css": "^11.13.5",
     "@floating-ui/dom": "^1.6.13",
@@ -38,6 +38,7 @@
     "@myriaddreamin/typst-ts-renderer": "^0.7.0-rc2",
     "@myriaddreamin/typst-ts-web-compiler": "^0.7.0-rc2",
     "@myriaddreamin/typst.ts": "^0.7.0-rc2",
+    "@phosphor-icons/react": "^2.1.7",
     "@preact/signals-core": "^1.8.0",
     "@radix-ui/react-collapsible": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.3",
