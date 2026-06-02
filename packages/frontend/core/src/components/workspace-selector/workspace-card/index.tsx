@@ -31,6 +31,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { NavbarIcon } from '@connaxis/brand';
 
 import { useAsyncCallback } from '../../hooks/affine-async-hooks';
+import { WorkspaceAvatar } from '../../workspace-avatar';
 import { useCatchEventCallback } from '../../hooks/use-catch-event-hook';
 import { useNavigateHelper } from '../../hooks/use-navigate-helper';
 import * as styles from './styles.css';
@@ -328,7 +329,15 @@ export const WorkspaceCard = forwardRef<
       >
         <div className={clsx(styles.infoContainer, infoClassName)}>
           {information ? (
-            <NavbarIcon size={avatarSize} />
+            information.avatar ? (
+              <WorkspaceAvatar
+                meta={workspaceMetadata}
+                size={avatarSize}
+                rounded={8}
+              />
+            ) : (
+              <NavbarIcon size={avatarSize} />
+            )
           ) : (
             <Skeleton width={avatarSize} height={avatarSize} />
           )}

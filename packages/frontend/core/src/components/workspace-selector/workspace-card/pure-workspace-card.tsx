@@ -8,6 +8,7 @@ import type { HTMLAttributes } from 'react';
 import { forwardRef } from 'react';
 
 import { NavbarIcon } from '@connaxis/brand';
+import { WorkspaceAvatar } from '../../workspace-avatar';
 import * as styles from './styles.css';
 
 export const PureWorkspaceCard = forwardRef<
@@ -49,7 +50,15 @@ export const PureWorkspaceCard = forwardRef<
       >
         <div className={styles.infoContainer}>
           {information ? (
-            <NavbarIcon size={avatarSize} />
+            information.avatar ? (
+              <WorkspaceAvatar
+                meta={workspaceMetadata}
+                size={avatarSize}
+                rounded={8}
+              />
+            ) : (
+              <NavbarIcon size={avatarSize} />
+            )
           ) : (
             <Skeleton width={avatarSize} height={avatarSize} />
           )}

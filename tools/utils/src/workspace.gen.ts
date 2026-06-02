@@ -1116,6 +1116,11 @@ export const PackageList = [
     ],
   },
   {
+    location: 'packages/brand',
+    name: '@connaxis/brand',
+    workspaceDependencies: [],
+  },
+  {
     location: 'packages/common/debug',
     name: '@affine/debug',
     workspaceDependencies: [],
@@ -1181,6 +1186,7 @@ export const PackageList = [
       'packages/common/error',
       'packages/common/graphql',
       'packages/frontend/routes',
+      'packages/brand',
     ],
   },
   {
@@ -1280,6 +1286,7 @@ export const PackageList = [
       'packages/common/error',
       'packages/common/graphql',
       'packages/frontend/i18n',
+      'packages/brand',
       'tools/utils',
     ],
   },
@@ -1305,6 +1312,7 @@ export const PackageList = [
       'blocksuite/affine/data-view',
       'blocksuite/framework/global',
       'blocksuite/framework/std',
+      'packages/brand',
       'packages/common/infra',
       'blocksuite/affine/ext-loader',
     ],
@@ -1526,6 +1534,7 @@ export type PackageName =
   | '@affine/docs'
   | '@affine/server-native'
   | '@affine/server'
+  | '@connaxis/brand'
   | '@affine/debug'
   | '@affine/env'
   | '@affine/error'
