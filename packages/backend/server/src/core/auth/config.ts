@@ -27,11 +27,13 @@ declare global {
 defineModuleConfig('auth', {
   allowSignup: {
     desc: 'Whether allow new registrations.',
-    default: true,
+    default: false,
+    env: ['AUTH_ALLOW_SIGNUP', 'boolean'],
   },
   allowSignupForOauth: {
     desc: 'Whether allow new registrations via configured oauth.',
-    default: true,
+    default: false,
+    env: ['AUTH_ALLOW_SIGNUP_FOR_OAUTH', 'boolean'],
   },
   requireEmailDomainVerification: {
     desc: 'Whether require email domain record verification before accessing restricted resources.',

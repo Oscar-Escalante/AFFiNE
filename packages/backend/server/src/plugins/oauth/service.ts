@@ -213,7 +213,24 @@ export class OAuthService {
     }
 
     if (!this.config.auth.allowSignupForOauth) {
-      throw new SignUpForbidden();
+      // When open signup is disabled, only allow OAuth login for users
+      // that already exist in the system (e.g. invited members).
+      const existingUser = await this.models.user.getUserByEmail(
+        externalAccount.email
+      );
+      if (!existingUser || existingUser.disabled) {
+        throw new SignUpForbidden();
+      }
+
+      await this.models.user.createConnectedAccount({
+        userId: existingUser.id,
+        provider,
+        providerAccountId: externalAccount.id,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: tokens.expiresAt,
+      });
+      return existingUser;
     }
 
     const user = await this.models.user.fulfill(externalAccount.email, {
