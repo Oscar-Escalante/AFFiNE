@@ -273,6 +273,7 @@ jobs:
           platforms: linux/amd64
           file: .github/deployment/node/Dockerfile
           tags: ghcr.io/oscar-escalante/connaxis-wiki:canary
+          build-args: CACHE_BUST=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

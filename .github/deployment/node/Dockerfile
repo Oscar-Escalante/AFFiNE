@@ -3,6 +3,8 @@
 FROM node:22-bookworm-slim AS assets
 WORKDIR /app
 
+# Bust layer cache on every build so favicon and static files are always fresh
+ARG CACHE_BUST=unknown
 COPY ./packages/backend/server /app
 COPY ./packages/frontend/apps/web/dist /app/static
 COPY ./packages/frontend/admin/dist /app/static/admin
