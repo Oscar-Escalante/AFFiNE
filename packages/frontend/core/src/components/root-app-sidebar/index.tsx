@@ -18,7 +18,7 @@ import type { Store } from '@blocksuite/affine/store';
 import {
   Files as AllDocsIcon,
   GearSix as SettingsIcon,
-  DownloadSimple as ImportIcon,
+  ArrowSquareIn as ImportIcon,
   Robot as AiOutlineIcon,
 } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService, useServices } from '@toeverything/infra';

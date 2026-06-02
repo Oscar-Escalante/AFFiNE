@@ -2,13 +2,12 @@ import { Tooltip } from '@affine/component/ui/tooltip';
 import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
 import type { SettingTab } from '@affine/core/modules/dialogs/constant';
 import { GlobalContextService } from '@affine/core/modules/global-context';
-import { UrlService } from '@affine/core/modules/url';
 import { useI18n } from '@affine/i18n';
-import { CloseIcon, NewIcon } from '@blocksuite/icons/rc';
-import { useLiveData, useService, useServices } from '@toeverything/infra';
+import { CloseIcon } from '@blocksuite/icons/rc';
+import { useLiveData, useService } from '@toeverything/infra';
 import { useCallback, useState } from 'react';
 
-import { ContactIcon, HelpIcon, KeyboardIcon } from './icons';
+import { HelpIcon, KeyboardIcon } from './icons';
 import {
   StyledAnimateWrapper,
   StyledIconWrapper,
@@ -16,24 +15,8 @@ import {
   StyledTriggerWrapper,
 } from './style';
 
-const DEFAULT_SHOW_LIST: IslandItemNames[] = [
-  'whatNew',
-  'contact',
-  'shortcuts',
-];
-
-const DESKTOP_SHOW_LIST: IslandItemNames[] = [...DEFAULT_SHOW_LIST];
-type IslandItemNames = 'whatNew' | 'contact' | 'shortcuts';
-
-const showList = BUILD_CONFIG.isElectron
-  ? DESKTOP_SHOW_LIST
-  : DEFAULT_SHOW_LIST;
-
 export const HelpIsland = () => {
-  const { globalContextService, urlService } = useServices({
-    GlobalContextService,
-    UrlService,
-  });
+  const globalContextService = useService(GlobalContextService);
   const docId = useLiveData(globalContextService.globalContext.docId.$);
   const docMode = useLiveData(globalContextService.globalContext.docMode.$);
   const workspaceDialogService = useService(WorkspaceDialogService);
@@ -42,16 +25,11 @@ export const HelpIsland = () => {
   const openSettingModal = useCallback(
     (tab: SettingTab) => {
       setShowSpread(false);
-
       workspaceDialogService.open('setting', {
         activeTab: tab,
       });
     },
     [workspaceDialogService]
-  );
-  const openAbout = useCallback(
-    () => openSettingModal('about'),
-    [openSettingModal]
   );
   const openShortcuts = useCallback(
     () => openSettingModal('shortcuts'),
@@ -68,43 +46,19 @@ export const HelpIsland = () => {
       inEdgelessPage={!!docId && docMode === 'edgeless'}
     >
       <StyledAnimateWrapper
-        style={{ height: spread ? `${showList.length * 40 + 4}px` : 0 }}
+        style={{ height: spread ? `${1 * 40 + 4}px` : 0 }}
       >
-        {showList.includes('whatNew') && (
-          <Tooltip content={t['com.affine.appUpdater.whatsNew']()} side="left">
-            <StyledIconWrapper
-              data-testid="right-bottom-change-log-icon"
-              onClick={() => {
-                urlService.openPopupWindow(BUILD_CONFIG.changelogUrl);
-              }}
-            >
-              <NewIcon />
-            </StyledIconWrapper>
-          </Tooltip>
-        )}
-        {showList.includes('contact') && (
-          <Tooltip content={t['com.affine.helpIsland.contactUs']()} side="left">
-            <StyledIconWrapper
-              data-testid="right-bottom-contact-us-icon"
-              onClick={openAbout}
-            >
-              <ContactIcon />
-            </StyledIconWrapper>
-          </Tooltip>
-        )}
-        {showList.includes('shortcuts') && (
-          <Tooltip
-            content={t['com.affine.keyboardShortcuts.title']()}
-            side="left"
+        <Tooltip
+          content={t['com.affine.keyboardShortcuts.title']()}
+          side="left"
+        >
+          <StyledIconWrapper
+            data-testid="shortcuts-icon"
+            onClick={openShortcuts}
           >
-            <StyledIconWrapper
-              data-testid="shortcuts-icon"
-              onClick={openShortcuts}
-            >
-              <KeyboardIcon />
-            </StyledIconWrapper>
-          </Tooltip>
-        )}
+            <KeyboardIcon />
+          </StyledIconWrapper>
+        </Tooltip>
       </StyledAnimateWrapper>
 
       {spread ? (
@@ -113,7 +67,7 @@ export const HelpIsland = () => {
         </StyledTriggerWrapper>
       ) : (
         <Tooltip
-          content={t['com.affine.helpIsland.helpAndFeedback']()}
+          content={t['com.affine.keyboardShortcuts.title']()}
           side="left"
         >
           <StyledTriggerWrapper data-testid="faq-icon">
