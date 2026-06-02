@@ -80,6 +80,11 @@ export class WorkspaceShareSetting extends Entity {
     this.inviteLinkLiveQuery.revalidate();
   };
 
+  setInviteLink = (inviteLink: InviteLink) => {
+    this.inviteLink$.next(inviteLink);
+    this.scheduleInviteLinkExpiry(inviteLink);
+  };
+
   async waitForRevalidation(signal?: AbortSignal) {
     this.revalidate();
     await this.isLoading$.waitFor(isLoading => !isLoading, signal);
