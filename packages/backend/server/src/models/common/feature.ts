@@ -97,9 +97,9 @@ const FreeFeature = {
   configs: {
     // quota name
     name: 'Free',
-    blobLimit: 10 * OneMB,
-    businessBlobLimit: 100 * OneMB,
-    storageQuota: 10 * OneGB,
+    blobLimit: 0,
+    businessBlobLimit: 0,
+    storageQuota: 100 * OneGB,
     historyPeriod: 7 * OneDay,
     memberLimit: 150,
     copilotActionLimit: 10,
