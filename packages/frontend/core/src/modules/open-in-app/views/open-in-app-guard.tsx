@@ -37,6 +37,4 @@ const WebOpenInAppGuard = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-export const OpenInAppGuard = environment.isMobile
-  ? Fragment
-  : WebOpenInAppGuard;
+export const OpenInAppGuard = Fragment;
