@@ -73,13 +73,21 @@ export const LinkInvite = ({
   );
 
   const onGenerate = useCallback(() => {
-    generateInvitationLink(selectedValue).catch(err => {
-      console.error('Failed to generate invitation link: ', err);
+    try {
+      generateInvitationLink(selectedValue).catch(err => {
+        console.error('Failed to generate invitation link: ', err);
+        notify.error({
+          title: 'Failed to generate invitation link',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      });
+    } catch (err) {
+      console.error('Failed to generate invitation link (sync): ', err);
       notify.error({
         title: 'Failed to generate invitation link',
-        message: err.message,
+        message: err instanceof Error ? err.message : String(err),
       });
-    });
+    }
   }, [generateInvitationLink, selectedValue]);
 
   const onCopy = useCallback(() => {
