@@ -40,9 +40,9 @@ export class QuotaStateService {
       ]);
     const flags = {
       ...resolved.flags,
-      unlimitedCopilot: entitlements.some(
-        entitlement => entitlement.plan === 'ai'
-      ),
+      unlimitedCopilot:
+        env.selfhosted ||
+        entitlements.some(entitlement => entitlement.plan === 'ai'),
     };
     const now = new Date();
 
