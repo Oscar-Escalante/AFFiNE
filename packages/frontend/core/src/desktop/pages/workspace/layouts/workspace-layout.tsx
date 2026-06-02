@@ -8,37 +8,31 @@ import { AIIsland } from '@affine/core/desktop/components/ai-island';
 import { AppContainer } from '@affine/core/desktop/components/app-container';
 import { DocumentTitle } from '@affine/core/desktop/components/document-title';
 import { WorkspaceDialogs } from '@affine/core/desktop/dialogs';
-import { AuthService, DefaultServerService } from '@affine/core/modules/cloud';
+import { AuthService } from '@affine/core/modules/cloud';
 import { PeekViewManagerModal } from '@affine/core/modules/peek-view';
 import { QuotaCheck } from '@affine/core/modules/quota';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import { WorkspaceService } from '@affine/core/modules/workspace';
-import { ServerFeature } from '@affine/graphql';
 import { LiveData, useLiveData, useService } from '@toeverything/infra';
 import type { PropsWithChildren } from 'react';
 import { useLayoutEffect } from 'react';
 
+// On native/Electron, local workspaces are allowed without auth.
+// On web (selfhosted or cloud), always require authentication.
+const isLocalWorkspaceAllowed = BUILD_CONFIG.isElectron || BUILD_CONFIG.isNative;
+
 const WorkspaceAuthGuard = ({ children }: PropsWithChildren) => {
   const authService = useService(AuthService);
-  const defaultServerService = useService(DefaultServerService);
   const sessionStatus = useLiveData(authService.session.status$);
-  const enableLocalWorkspace =
-    useLiveData(
-      defaultServerService.server.config$.selector(
-        c =>
-          c.features.includes(ServerFeature.LocalWorkspace) ||
-          BUILD_CONFIG.isNative
-      )
-    ) ?? true;
   const { jumpToSignIn } = useNavigateHelper();
 
   useLayoutEffect(() => {
-    if (!enableLocalWorkspace && sessionStatus === 'unauthenticated') {
+    if (!isLocalWorkspaceAllowed && sessionStatus === 'unauthenticated') {
       jumpToSignIn();
     }
-  }, [enableLocalWorkspace, sessionStatus, jumpToSignIn]);
+  }, [sessionStatus, jumpToSignIn]);
 
-  if (!enableLocalWorkspace && sessionStatus !== 'authenticated') {
+  if (!isLocalWorkspaceAllowed && sessionStatus !== 'authenticated') {
     return null;
   }
 
