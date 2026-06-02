@@ -7,7 +7,6 @@ import onboardingUrl from '@affine/templates/onboarding.zip';
 import { ZipTransformer } from '@blocksuite/affine/widgets/linked-doc';
 
 import { DocsService } from '../modules/doc';
-import { OrganizeService } from '../modules/organize';
 import {
   getAFFiNEWorkspaceSchema,
   type WorkspacesService,
@@ -40,25 +39,6 @@ export async function buildShowcaseWorkspace(
   const defaultDoc = docsService.list.docs$.value.find(p =>
     p.title$.value.startsWith('Getting Started')
   );
-  const folderTutorialDoc = docsService.list.docs$.value.find(p =>
-    p.title$.value.startsWith('How to use folder and Tags')
-  );
-
-  // create default organize
-  if (folderTutorialDoc) {
-    const organizeService = workspace.scope.get(OrganizeService);
-    const folderId = organizeService.folderTree.rootFolder.createFolder(
-      'First Folder',
-      organizeService.folderTree.rootFolder.indexAt('after')
-    );
-    const firstFolderNode =
-      organizeService.folderTree.folderNode$(folderId).value;
-    firstFolderNode?.createLink(
-      'doc',
-      folderTutorialDoc.id,
-      firstFolderNode.indexAt('after')
-    );
-  }
 
   dispose();
 
