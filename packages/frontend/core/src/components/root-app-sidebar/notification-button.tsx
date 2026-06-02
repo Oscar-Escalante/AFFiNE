@@ -3,7 +3,7 @@ import { MenuItem } from '@affine/core/modules/app-sidebar/views';
 import { NotificationCountService } from '@affine/core/modules/notification';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
-import { BellDuotone as NotificationIcon } from '@phosphor-icons/react/dist/ssr';
+import { Bell as NotificationIcon } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService } from '@toeverything/infra';
 import { useCallback, useState } from 'react';
 
@@ -54,7 +54,7 @@ export const NotificationButton = () => {
       items={<NotificationList />}
     >
       <MenuItem
-        icon={<NotificationIcon />}
+        icon={<NotificationIcon weight="duotone" />}
         postfix={<Badge count={notificationCount} />}
         active={notificationListOpen}
         postfixDisplay="always"

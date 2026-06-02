@@ -16,10 +16,10 @@ import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import type { Store } from '@blocksuite/affine/store';
 import {
-  FilesDuotone as AllDocsIcon,
-  GearSixDuotone as SettingsIcon,
-  DownloadSimpleDuotone as ImportIcon,
-  RobotDuotone as AiOutlineIcon,
+  Files as AllDocsIcon,
+  GearSix as SettingsIcon,
+  DownloadSimple as ImportIcon,
+  Robot as AiOutlineIcon,
 } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
 import type { ReactElement } from 'react';
@@ -76,7 +76,7 @@ const AllDocsButton = () => {
   );
 
   return (
-    <MenuLinkItem icon={<AllDocsIcon />} active={allPageActive} to={'/all'}>
+    <MenuLinkItem icon={<AllDocsIcon weight="duotone" />} active={allPageActive} to={'/all'}>
       <span data-testid="all-pages">
         {t['com.affine.workspaceSubPath.all']()}
       </span>
@@ -104,7 +104,7 @@ const AIChatButton = () => {
   }
 
   return (
-    <MenuLinkItem icon={<AiOutlineIcon />} active={aiChatActive} to={'/chat'}>
+    <MenuLinkItem icon={<AiOutlineIcon weight="duotone" />} active={aiChatActive} to={'/chat'}>
       <span data-testid="ai-chat">
         {t['com.affine.workspaceSubPath.chat']()}
       </span>
@@ -213,7 +213,7 @@ export const RootAppSidebar = memo((): ReactElement => {
         <AIChatButton />
         <MenuItem
           data-testid="slider-bar-workspace-setting-button"
-          icon={<SettingsIcon />}
+          icon={<SettingsIcon weight="duotone" />}
           onClick={onOpenSettingModal}
         >
           <span data-testid="settings-modal-trigger">
@@ -235,7 +235,7 @@ export const RootAppSidebar = memo((): ReactElement => {
           <TrashButton />
           <MenuItem
             data-testid="slider-bar-import-button"
-            icon={<ImportIcon />}
+            icon={<ImportIcon weight="duotone" />}
             onClick={onOpenImportModal}
           >
             <span data-testid="import-modal-trigger">{t['Import']()}</span>

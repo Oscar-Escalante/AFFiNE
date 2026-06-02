@@ -4,7 +4,7 @@ import {
   useConfirmModal,
   useDropTarget,
 } from '@affine/component';
-import { TrashDuotone as TrashIcon } from '@phosphor-icons/react/dist/ssr';
+import { Trash as TrashIcon } from '@phosphor-icons/react/dist/ssr';
 import { MenuLinkItem } from '@affine/core/modules/app-sidebar/views';
 import { DocsService } from '@affine/core/modules/doc';
 import { GlobalContextService } from '@affine/core/modules/global-context';
@@ -77,7 +77,7 @@ export const TrashButton = () => {
   return (
     <MenuLinkItem
       ref={dropTargetRef}
-      icon={draggedOver ? <AnimatedDeleteIcon closed={draggedOver} /> : <TrashIcon />}
+      icon={draggedOver ? <AnimatedDeleteIcon closed={draggedOver} /> : <TrashIcon weight="duotone" />}
       active={trashActive || draggedOver}
       to={'/trash'}
     >

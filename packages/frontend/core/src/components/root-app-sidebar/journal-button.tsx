@@ -3,7 +3,7 @@ import { DocDisplayMetaService } from '@affine/core/modules/doc-display-meta';
 import { JournalService } from '@affine/core/modules/journal';
 import { WorkbenchService } from '@affine/core/modules/workbench';
 import { useI18n } from '@affine/i18n';
-import { CalendarDotDuotone as TodayIcon } from '@phosphor-icons/react/dist/ssr';
+import { CalendarDot as TodayIcon } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService } from '@toeverything/infra';
 
 export const AppSidebarJournalButton = () => {
@@ -23,7 +23,7 @@ export const AppSidebarJournalButton = () => {
       data-testid="slider-bar-journals-button"
       active={isJournal || location.pathname.startsWith('/journals')}
       to={'/journals'}
-      icon={<Icon />}
+      icon={<Icon weight="duotone" />}
     >
       {t['com.affine.journal.app-sidebar-title']()}
     </MenuLinkItem>
