@@ -101,7 +101,7 @@ const FreeFeature = {
     businessBlobLimit: 100 * OneMB,
     storageQuota: 10 * OneGB,
     historyPeriod: 7 * OneDay,
-    memberLimit: 3,
+    memberLimit: 10,
     copilotActionLimit: 10,
   },
 } as const;
