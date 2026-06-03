@@ -1,0 +1,59 @@
+diff --git a/packages/frontend/admin/package.json b/packages/frontend/admin/package.json
+index f66d1bb366..d431edebab 100644
+--- a/packages/frontend/admin/package.json
++++ b/packages/frontend/admin/package.json
+@@ -9,6 +9,7 @@
+     "@affine/graphql": "workspace:*",
+     "@affine/routes": "workspace:*",
+     "@blocksuite/icons": "^2.2.17",
++    "@connaxis/brand": "workspace:*",
+     "@queuedash/ui": "^3.16.0",
+     "@radix-ui/react-accordion": "^1.2.2",
+     "@radix-ui/react-alert-dialog": "^1.1.3",
+diff --git a/packages/frontend/component/package.json b/packages/frontend/component/package.json
+index 22dcdfcc48..0428e06b5c 100644
+--- a/packages/frontend/component/package.json
++++ b/packages/frontend/component/package.json
+@@ -27,6 +27,7 @@
+     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
+     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
+     "@blocksuite/icons": "^2.2.17",
++    "@connaxis/brand": "workspace:*",
+     "@emotion/react": "^11.14.0",
+     "@emotion/styled": "^11.14.0",
+     "@radix-ui/react-avatar": "^1.1.11",
+diff --git a/packages/frontend/core/package.json b/packages/frontend/core/package.json
+index e55a691bba..f2bfafab09 100644
+--- a/packages/frontend/core/package.json
++++ b/packages/frontend/core/package.json
+@@ -28,6 +28,7 @@
+     "@blocksuite/global": "workspace:*",
+     "@blocksuite/icons": "^2.2.17",
+     "@blocksuite/std": "workspace:*",
++    "@connaxis/brand": "workspace:*",
+     "@emotion/cache": "^11.14.0",
+     "@emotion/css": "^11.13.5",
+     "@floating-ui/dom": "^1.6.13",
+@@ -37,6 +38,7 @@
+     "@myriaddreamin/typst-ts-renderer": "^0.7.0-rc2",
+     "@myriaddreamin/typst-ts-web-compiler": "^0.7.0-rc2",
+     "@myriaddreamin/typst.ts": "^0.7.0-rc2",
++    "@phosphor-icons/react": "^2.1.7",
+     "@preact/signals-core": "^1.8.0",
+     "@radix-ui/react-collapsible": "^1.1.2",
+     "@radix-ui/react-dialog": "^1.1.3",
+diff --git a/packages/frontend/core/public/manifest.json b/packages/frontend/core/public/manifest.json
+index 162f149a21..a24155609a 100755
+--- a/packages/frontend/core/public/manifest.json
++++ b/packages/frontend/core/public/manifest.json
+@@ -1,7 +1,7 @@
+ {
+-  "name": "AFFiNE: There can be more than Notion and Miro.",
+-  "short_name": "AFFiNE",
+-  "description": "AFFiNE is a workspace with fully merged docs, whiteboards and databases. Get more things done, your creativity isn’t monotone.",
++  "name": "Connaxis Wiki",
++  "short_name": "Connaxis",
++  "description": "Espacio de trabajo colaborativo para el equipo Connaxis.",
+   "start_url": "/?source=pwa",
+   "background_color": "#ffffff",
+   "display": "standalone",

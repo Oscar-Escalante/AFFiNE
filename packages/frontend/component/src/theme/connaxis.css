@@ -1,0 +1,132 @@
+/* ============================================================
+   Connaxis Wiki — Brand Theme Override
+   Overrides @toeverything/theme variables after they load.
+   Light mode only — dark mode inherits AFFiNE defaults.
+   ============================================================ */
+
+/* ── Lato from Google Fonts (300 + 400 weights) ─────────── */
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
+
+/* ── Light mode overrides ─────────────────────────────────── */
+:root,
+[data-theme='light'] {
+
+  /* ── Typography ─────────────────────────────────────────── */
+  --affine-font-family: 'Lato', 'Inter', system-ui, -apple-system,
+    BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --affine-font-sans-family: 'Lato', 'Inter', system-ui, -apple-system,
+    BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+
+  /* ── Primary Accent: Connaxis Orange ────────────────────── */
+  --affine-brand-color: #f09500;
+  --affine-primary-color: #f09500;
+  --affine-primary-color-04: rgba(240, 149, 0, 0.04);
+
+  /* ── Surfaces: Warm Paper Palette ───────────────────────── */
+  /* Main content background */
+  --affine-background-primary-color: #f9fae4;
+  /* Panels, sidebars, dropdowns */
+  --affine-background-overlay-panel-color: #f2f0d8;
+  /* Secondary surfaces (cards, insets) */
+  --affine-background-secondary-color: #ede9c8;
+  /* Tertiary (nested insets, hover fills) */
+  --affine-background-tertiary-color: #e8d096;
+  /* Code blocks */
+  --affine-background-code-block: #eee9c4;
+
+  /* ── Text: Warm Charcoal ────────────────────────────────── */
+  --affine-text-primary-color: #323231;
+
+  /* ── Hover States ───────────────────────────────────────── */
+  --affine-hover-color: rgba(240, 149, 0, 0.06);
+  --affine-hover-color-filled: #ede9c8;
+
+  /* ── v2 System: Accent ──────────────────────────────────── */
+  --affine-v2-button-primary: #f09500;
+  --affine-v2-database-focusBackground: rgba(240, 149, 0, 0.10);
+  --affine-v2-button-templateLabelBackground: rgba(240, 149, 0, 0.08);
+  --affine-v2-aI-applyTextHighlight: #f09500;
+  --affine-v2-aI-applyTextHighlightBackground: rgba(240, 149, 0, 0.08);
+
+  /* ── v2 System: Surfaces ────────────────────────────────── */
+  --affine-v2-dialog-background-primary: #f9fae4;
+  --affine-v2-centerPeek-background: #f9fae4;
+  --affine-v2-centerPeek-buttonBackground: #f2f0d8;
+  --affine-v2-database-buttonBackground: #f2f0d8;
+  --affine-v2-block-notSupportedBlock-background: #f2f0d8;
+
+  /* ── Sidebar: Connaxis Navy ─────────────────────────────── */
+  --connaxis-sidebar-bg: #1b3a6b;
+  --connaxis-sidebar-text: rgba(255, 255, 255, 0.85);
+  --connaxis-sidebar-text-active: #ffffff;
+  --connaxis-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --connaxis-sidebar-active-bg: rgba(240, 149, 0, 0.20);
+  --connaxis-sidebar-icon-muted: rgba(255, 255, 255, 0.50);
+}
+
+/* ── Sidebar Navy Background ──────────────────────────────── */
+[data-theme='light'] app-sidebar,
+[data-theme='light'] affine-app-sidebar,
+[data-theme='light'] [data-testid='app-sidebar'] {
+  background-color: var(--connaxis-sidebar-bg) !important;
+}
+
+/* Sidebar text and icon colors */
+[data-theme='light'] [data-testid='app-sidebar'] *,
+[data-theme='light'] app-sidebar * {
+  --affine-text-primary-color: var(--connaxis-sidebar-text);
+  --affine-text-secondary-color: var(--connaxis-sidebar-icon-muted);
+  --affine-icon-color: var(--connaxis-sidebar-text);
+  --affine-hover-color: var(--connaxis-sidebar-hover);
+  --affine-hover-color-filled: var(--connaxis-sidebar-hover);
+}
+
+/* Active sidebar item highlight */
+[data-theme='light'] [data-testid='app-sidebar'] [data-active='true'],
+[data-theme='light'] app-sidebar [aria-current='page'] {
+  background-color: var(--connaxis-sidebar-active-bg) !important;
+  color: var(--connaxis-sidebar-text-active) !important;
+}
+
+/* ── Lato font-weight fine-tuning ─────────────────────────── */
+body {
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+h1, h2, h3, h4, h5, h6,
+.affine-page-title,
+[class*='heading'] {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #1b3a6b;
+}
+
+/* ── Scrollbar: subtle warm tone ─────────────────────────── */
+editor-host *::-webkit-scrollbar-thumb {
+  background-color: #e8d096;
+  border-radius: 4px;
+}
+editor-host *::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+editor-host * {
+  scrollbar-color: #e8d096 transparent;
+}
+
+/* ── Input autofill: remove white flash ─────────────────── */
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px #f9fae4 inset !important;
+  -webkit-text-fill-color: #323231 !important;
+}
+
+/* ── Focus ring: orange instead of blue ─────────────────── */
+:focus-visible {
+  outline-color: #f09500 !important;
+}
+
+/* ── Selection highlight ─────────────────────────────────── */
+::selection {
+  background-color: rgba(240, 149, 0, 0.20);
+  color: #323231;
+}

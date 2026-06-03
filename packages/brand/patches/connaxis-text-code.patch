@@ -1,0 +1,2812 @@
+diff --git a/.github/deployment/node/Dockerfile b/.github/deployment/node/Dockerfile
+index 7f637cbcfd..22afddc91f 100644
+--- a/.github/deployment/node/Dockerfile
++++ b/.github/deployment/node/Dockerfile
+@@ -3,10 +3,14 @@
+ FROM node:22-bookworm-slim AS assets
+ WORKDIR /app
+ 
++# Bust layer cache on every build so favicon and static files are always fresh
++ARG CACHE_BUST=unknown
+ COPY ./packages/backend/server /app
+ COPY ./packages/frontend/apps/web/dist /app/static
+ COPY ./packages/frontend/admin/dist /app/static/admin
+ COPY ./packages/frontend/apps/mobile/dist /app/static/mobile
++# Use the Connaxis PNG as favicon.ico (PNG is accepted by all modern browsers)
++RUN cp /app/static/favicon-192.png /app/static/favicon.ico
+ 
+ # Keep server sourcemap for stacktraces, but don't ship frontend/node_modules sourcemaps.
+ ARG TARGETARCH
+diff --git a/.github/workflows/connaxis-build.yml b/.github/workflows/connaxis-build.yml
+new file mode 100644
+index 0000000000..765b4bef3e
+--- /dev/null
++++ b/.github/workflows/connaxis-build.yml
+@@ -0,0 +1,296 @@
++name: Build & Deploy Connaxis Wiki
++
++on:
++  push:
++    branches: [canary]
++  workflow_dispatch:
++
++permissions:
++  contents: read
++  packages: write
++
++jobs:
++  build-native:
++    name: Build Rust server-native (x64)
++    runs-on: ubuntu-22.04
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version-file: '.nvmrc'
++
++      - name: Enable Corepack
++        run: corepack enable
++
++      - name: Install server-native deps
++        run: yarn workspaces focus @affine/server-native
++        env:
++          HUSKY: '0'
++          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
++          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
++          SENTRYCLI_SKIP_DOWNLOAD: '1'
++
++      - name: Setup Rust 1.96.0
++        uses: dtolnay/rust-toolchain@stable
++        with:
++          toolchain: '1.96.0'
++          targets: x86_64-unknown-linux-gnu
++
++      - name: Cache Rust
++        uses: Swatinem/rust-cache@v2
++        with:
++          shared-key: x86_64-server-native
++
++      - name: Install clang
++        run: sudo apt-get install -y clang
++
++      - name: Build server-native
++        run: yarn workspace @affine/server-native build --target x86_64-unknown-linux-gnu
++        env:
++          CC: clang -D_BSD_SOURCE
++          TARGET_CC: clang -D_BSD_SOURCE
++
++      - name: Rename artifact
++        run: mv packages/backend/native/server-native.node packages/backend/native/server-native.x64.node
++
++      - name: Upload server-native
++        uses: actions/upload-artifact@v4
++        with:
++          name: server-native-x64
++          path: packages/backend/native/server-native.x64.node
++          if-no-files-found: error
++
++  build-frontend:
++    name: Build web + admin
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version-file: '.nvmrc'
++
++      - name: Enable Corepack
++        run: corepack enable
++
++      - name: Install dependencies
++        run: yarn install
++        env:
++          HUSKY: '0'
++          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
++          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
++          SENTRYCLI_SKIP_DOWNLOAD: '1'
++          YARN_ENABLE_IMMUTABLE_INSTALLS: 'false'
++
++      - name: Set version
++        run: ./scripts/set-version.sh 0.26.3-connaxis
++
++      - name: Build web
++        run: node_modules/.bin/affine bundle -p web
++        env:
++          BUILD_TYPE: stable
++
++      - name: Build admin
++        run: node_modules/.bin/affine bundle -p admin
++        env:
++          BUILD_TYPE: stable
++
++      - name: Upload web
++        uses: actions/upload-artifact@v4
++        with:
++          name: web
++          path: packages/frontend/apps/web/dist
++          if-no-files-found: error
++
++      - name: Upload admin
++        uses: actions/upload-artifact@v4
++        with:
++          name: admin
++          path: packages/frontend/admin/dist
++          if-no-files-found: error
++
++  build-server:
++    name: Build TypeScript server
++    runs-on: ubuntu-latest
++    needs: [build-native]
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version-file: '.nvmrc'
++
++      - name: Enable Corepack
++        run: corepack enable
++
++      - name: Download server-native
++        uses: actions/download-artifact@v4
++        with:
++          name: server-native-x64
++          path: packages/backend/native
++
++      - name: Install server deps
++        run: yarn workspaces focus @affine/server
++        env:
++          HUSKY: '0'
++          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
++          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
++          SENTRYCLI_SKIP_DOWNLOAD: '1'
++
++      - name: Set version
++        run: ./scripts/set-version.sh 0.26.3-connaxis
++
++      - name: Create placeholder arm native files
++        run: |
++          touch packages/backend/native/server-native.node
++          touch packages/backend/native/server-native.arm64.node
++          touch packages/backend/native/server-native.armv7.node
++
++      - name: Build server
++        run: yarn workspace @affine/server build
++
++      - name: Upload server dist
++        uses: actions/upload-artifact@v4
++        with:
++          name: server-dist
++          path: packages/backend/server/dist
++          if-no-files-found: error
++
++  build-and-push:
++    name: Docker image → GHCR
++    runs-on: ubuntu-latest
++    needs: [build-frontend, build-server]
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Download web
++        uses: actions/download-artifact@v4
++        with:
++          name: web
++          path: packages/frontend/apps/web/dist
++
++      - name: Download admin
++        uses: actions/download-artifact@v4
++        with:
++          name: admin
++          path: packages/frontend/admin/dist
++
++      - name: Download server dist
++        uses: actions/download-artifact@v4
++        with:
++          name: server-dist
++          path: packages/backend/server/dist
++
++      - name: Download server-native
++        uses: actions/download-artifact@v4
++        with:
++          name: server-native-x64
++          path: packages/backend/native
++
++      - name: Create empty mobile dist (not needed for web-only)
++        run: |
++          mkdir -p packages/frontend/apps/mobile/dist
++          echo '{"js":[],"css":[],"publicPath":"/","gitHash":"","description":""}' \
++            > packages/frontend/apps/mobile/dist/assets-manifest.json
++
++      - name: Setup Node.js
++        uses: actions/setup-node@v4
++        with:
++          node-version-file: '.nvmrc'
++
++      - name: Enable Corepack
++        run: corepack enable
++
++      - name: Install production deps
++        run: |
++          yarn config set --json supportedArchitectures.cpu '["x64"]'
++          yarn config set --json supportedArchitectures.libc '["glibc"]'
++          yarn workspaces focus @affine/server --production
++        env:
++          HUSKY: '0'
++
++      - name: Generate Prisma client
++        run: yarn workspace @affine/server prisma generate
++
++      - name: Move node_modules into server package
++        run: mv ./node_modules ./packages/backend/server/
++
++      - name: Set version
++        run: ./scripts/set-version.sh 0.26.3-connaxis
++
++      - name: Generate Connaxis favicon from brand logo
++        run: |
++          pip install pillow -q
++          python3 << 'PYEOF'
++          from PIL import Image
++          import struct, io, os
++
++          src = "packages/brand/assets/logo.png"
++          dst = "packages/frontend/apps/web/dist/favicon.ico"
++
++          img = Image.open(src).convert("RGBA")
++          sizes = [16, 24, 32, 48, 64, 128, 256]
++          png_data = []
++          for size in sizes:
++              buf = io.BytesIO()
++              img.resize((size, size), Image.LANCZOS).save(buf, format="PNG", optimize=True)
++              png_data.append(buf.getvalue())
++
++          header = struct.pack('<HHH', 0, 1, len(sizes))
++          offset = 6 + len(sizes) * 16
++          for i, size in enumerate(sizes):
++              w = size if size < 256 else 0
++              header += struct.pack('<BBBBHHII', w, w, 0, 0, 1, 32, len(png_data[i]), offset)
++              offset += len(png_data[i])
++
++          with open(dst, 'wb') as f:
++              f.write(header)
++              for data in png_data:
++                  f.write(data)
++
++          print(f"favicon.ico: {os.path.getsize(dst)} bytes")
++          PYEOF
++
++      - name: Login to GHCR
++        uses: docker/login-action@v3
++        with:
++          registry: ghcr.io
++          username: ${{ github.actor }}
++          password: ${{ secrets.GITHUB_TOKEN }}
++
++      - name: Set up Docker Buildx
++        uses: docker/setup-buildx-action@v3
++
++      - name: Build & push image
++        uses: docker/build-push-action@v6
++        with:
++          context: .
++          push: true
++          platforms: linux/amd64
++          file: .github/deployment/node/Dockerfile
++          tags: ghcr.io/oscar-escalante/connaxis-wiki:canary
++          build-args: CACHE_BUST=${{ github.sha }}
++          cache-from: type=gha
++          cache-to: type=gha,mode=max
++
++  deploy:
++    name: Deploy to VPS
++    runs-on: ubuntu-latest
++    needs: [build-and-push]
++    steps:
++      - name: Pull & restart on VPS
++        uses: appleboy/ssh-action@v1
++        with:
++          host: apps.connaxis.com
++          port: 22666
++          username: sshadmin
++          password: ${{ secrets.VPS_PASSWORD }}
++          script: |
++            cd /home/sshadmin/apps/affine
++            docker pull ghcr.io/oscar-escalante/connaxis-wiki:canary
++            docker compose up -d affine
++            docker image prune -f
+diff --git a/package.json b/package.json
+index 6c3931eed5..b4214cfd7d 100644
+--- a/package.json
++++ b/package.json
+@@ -7,6 +7,7 @@
+   "workspaces": [
+     ".",
+     "blocksuite/**/*",
++    "packages/brand",
+     "packages/*/*",
+     "packages/frontend/apps/*",
+     "tools/*",
+diff --git a/packages/backend/native/src/llm/assets/prompts/built-in.json b/packages/backend/native/src/llm/assets/prompts/built-in.json
+index 9f96bbb515..dbfcb28b1e 100644
+--- a/packages/backend/native/src/llm/assets/prompts/built-in.json
++++ b/packages/backend/native/src/llm/assets/prompts/built-in.json
+@@ -2,11 +2,9 @@
+   {
+     "name": "Transcript audio",
+     "action": "Transcript audio",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "optionalModels": [
+-      "gemini-2.5-flash",
+-      "gemini-2.5-pro",
+-      "gemini-3.1-pro-preview"
++      "claude-sonnet-4-6"
+     ],
+     "config": {
+       "requireContent": false,
+@@ -23,11 +21,9 @@
+   {
+     "name": "Transcript audio structured",
+     "action": "Transcript audio structured",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "optionalModels": [
+-      "gemini-2.5-flash",
+-      "gemini-2.5-pro",
+-      "gemini-3.1-pro-preview"
++      "claude-sonnet-4-6"
+     ],
+     "config": {
+       "requireContent": false,
+@@ -48,7 +44,7 @@
+   {
+     "name": "Generate a caption",
+     "action": "Generate a caption",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "requireContent": false,
+       "requireAttachment": true
+@@ -63,7 +59,7 @@
+   {
+     "name": "Conversation Summary",
+     "action": "Conversation Summary",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "requireContent": false
+     },
+@@ -81,7 +77,7 @@
+   {
+     "name": "Summary",
+     "action": "Summary",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -96,7 +92,7 @@
+   {
+     "name": "Summary as title",
+     "action": "Summary as title",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -111,7 +107,7 @@
+   {
+     "name": "Summary the webpage",
+     "action": "Summary the webpage",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "user",
+@@ -122,8 +118,10 @@
+   {
+     "name": "Explain this",
+     "action": "Explain this",
+-    "model": "gpt-5-mini",
+-    "builtins": ["language"],
++    "model": "claude-sonnet-4-6",
++    "builtins": [
++      "language"
++    ],
+     "messages": [
+       {
+         "role": "system",
+@@ -138,7 +136,7 @@
+   {
+     "name": "Explain this image",
+     "action": "Explain this image",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "requireContent": false,
+       "requireAttachment": true
+@@ -157,7 +155,7 @@
+   {
+     "name": "Explain this code",
+     "action": "Explain this code",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -172,7 +170,7 @@
+   {
+     "name": "Translate to",
+     "action": "Translate",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "params": {
+       "language": {
+         "default": "English",
+@@ -205,7 +203,7 @@
+   {
+     "name": "Summarize the meeting structured",
+     "action": "Summarize the meeting structured",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -220,7 +218,7 @@
+   {
+     "name": "Summarize the meeting",
+     "action": "Summarize the meeting",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -235,7 +233,7 @@
+   {
+     "name": "Find action for summary",
+     "action": "Find action for summary",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -250,7 +248,7 @@
+   {
+     "name": "Write an article about this",
+     "action": "Write an article about this",
+-    "model": "gemini-2.5-pro",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -265,7 +263,7 @@
+   {
+     "name": "Write a twitter about this",
+     "action": "Write a twitter about this",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -280,7 +278,7 @@
+   {
+     "name": "Write a poem about this",
+     "action": "Write a poem about this",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -295,7 +293,7 @@
+   {
+     "name": "Write a blog post about this",
+     "action": "Write a blog post about this",
+-    "model": "gemini-2.5-pro",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -310,7 +308,7 @@
+   {
+     "name": "Write outline",
+     "action": "Write outline",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -325,11 +323,17 @@
+   {
+     "name": "Change tone to",
+     "action": "Change tone",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "params": {
+       "tone": {
+         "default": "professional",
+-        "enum": ["professional", "informal", "friendly", "critical", "humorous"]
++        "enum": [
++          "professional",
++          "informal",
++          "friendly",
++          "critical",
++          "humorous"
++        ]
+       }
+     },
+     "messages": [
+@@ -346,7 +350,7 @@
+   {
+     "name": "Brainstorm ideas about this",
+     "action": "Brainstorm ideas about this",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -361,7 +365,7 @@
+   {
+     "name": "Brainstorm mindmap",
+     "action": "Brainstorm mindmap",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -376,7 +380,7 @@
+   {
+     "name": "Expand mind map",
+     "action": "Expand mind map",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -395,7 +399,7 @@
+   {
+     "name": "Improve writing for it",
+     "action": "Improve writing for it",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -410,7 +414,7 @@
+   {
+     "name": "Improve grammar for it",
+     "action": "Improve grammar for it",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -425,7 +429,7 @@
+   {
+     "name": "Fix spelling for it",
+     "action": "Fix spelling for it",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -440,7 +444,7 @@
+   {
+     "name": "Find action items from it",
+     "action": "Find action items from it",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -455,7 +459,7 @@
+   {
+     "name": "Check code error",
+     "action": "Check code error",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -470,7 +474,7 @@
+   {
+     "name": "Create a presentation",
+     "action": "Create a presentation",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -485,7 +489,7 @@
+   {
+     "name": "Create headings",
+     "action": "Create headings",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -530,7 +534,7 @@
+   {
+     "name": "Make it longer",
+     "action": "Make it longer",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -545,7 +549,7 @@
+   {
+     "name": "Make it shorter",
+     "action": "Make it shorter",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -560,7 +564,7 @@
+   {
+     "name": "Continue writing",
+     "action": "Continue writing",
+-    "model": "gemini-2.5-flash",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -701,12 +705,9 @@
+     ]
+   },
+   {
+-    "name": "Chat With AFFiNE AI",
+-    "model": "gemini-2.5-flash",
++    "name": "Chat With Connaxis AI",
++    "model": "claude-sonnet-4-6",
+     "optionalModels": [
+-      "gemini-2.5-flash",
+-      "gemini-2.5-pro",
+-      "gemini-3.5-flash",
+       "claude-sonnet-4-6"
+     ],
+     "config": {
+@@ -722,7 +723,9 @@
+         "codeArtifact",
+         "blobRead"
+       ],
+-      "proModels": ["gemini-2.5-pro", "gemini-3.5-flash", "claude-sonnet-4-6"]
++      "proModels": [
++        "claude-sonnet-4-6"
++      ]
+     },
+     "builtins": [
+       "date",
+@@ -736,7 +739,7 @@
+     "messages": [
+       {
+         "role": "system",
+-        "template": "### Your Role\nYou are AFFiNE AI, a professional and humorous copilot within AFFiNE. Powered by the latest agentic model provided by OpenAI, Anthropic, Google and AFFiNE, you assist users within AFFiNE — an open-source, all-in-one productivity tool, and AFFiNE is developed by Toeverything Pte. Ltd., a Singapore-registered company with a diverse international team. AFFiNE integrates unified building blocks that can be used across multiple interfaces, including a block-based document editor, an infinite canvas in edgeless mode, and a multidimensional table with multiple convertible views. You always respect user privacy and never disclose user information to others.\n\nDon't hold back. Give it your all.\n\n<real_world_info>\nToday is: {{affine::date}}.\nUser's preferred language is {{affine::language}}.\nUser's timezone is {{affine::timezone}}.\n</real_world_info>\n\n{{#affine::hasCurrentDoc}}\n<current_document_context>\nThe user is chatting within the current document: {{currentDocId}}.\nIf the user's request relates to this document, call the doc_read tool with docId {{currentDocId}} to read it before answering.\n</current_document_context>\n{{/affine::hasCurrentDoc}}\n\n<content_analysis>\n- If documents are provided, analyze all documents based on the user's query\n- Identify key information relevant to the user's specific request\n- Use the structure and content of fragments to determine their relevance\n- Disregard irrelevant information to provide focused responses\n</content_analysis>\n\n<content_fragments>\n## Content Fragment Types\n- **Document fragments**: Identified by `document_id` containing `document_content`\n</content_fragments>\n\n<citations>\nAlways use markdown footnote format for citations:\n- Format: [^reference_index]\n- Where reference_index is an increasing positive integer (1, 2, 3...)\n- Place citations immediately after the relevant sentence or paragraph\n- NO spaces within citation brackets: [^1] is correct, [^ 1] or [ ^1] are incorrect\n- DO NOT linked together like [^1, ^6, ^7] and [^1, ^2], if you need to use multiple citations, use [^1][^2]\n \nCitations must appear in two places:\n1. INLINE: Within your main content as [^reference_index]\n2. REFERENCE LIST: At the end of your response as properly formatted JSON\n\nThe citation reference list MUST use these exact JSON formats:\n- For documents: [^reference_index]:{\"type\":\"doc\",\"docId\":\"document_id\"}\n- For files: [^reference_index]:{\"type\":\"attachment\",\"blobId\":\"blob_id\",\"fileName\":\"file_name\",\"fileType\":\"file_type\"}\n- For web url: [^reference_index]:{\"type\":\"url\",\"url\":\"url_path\"}\n</reference_format>\n\nYour complete response MUST follow this structure:\n1. Main content with inline citations [^reference_index]\n2. One empty line\n3. Reference list with all citations in required JSON format\n\nThis sentence contains information from the first source[^1]. This sentence references data from an attachment[^2].\n\n[^1]:{\"type\":\"doc\",\"docId\":\"abc123\"}\n[^2]:{\"type\":\"attachment\",\"blobId\":\"xyz789\",\"fileName\":\"example.txt\",\"fileType\":\"text\"}\n \n</citations>\n\n<formatting_guidelines>\n- Use proper markdown for all content (headings, lists, tables, code blocks)\n- Format code in markdown code blocks with appropriate language tags\n- Add explanatory comments to all code provided\n- Structure longer responses with clear headings and sections\n</formatting_guidelines>\n\n<tool-calling-guidelines>\nBefore starting Tool calling, you need to follow:\n- DO NOT explain what operation you will perform.\n- DO NOT embed a tool call mid-sentence.\n- When searching for unknown information, personal information or keyword, prioritize searching the user's workspace rather than the web.\n- Depending on the complexity of the question and the information returned by the search tools, you can call different tools multiple times to search.\n- Even if the content of the attachment is sufficient to answer the question, it is still necessary to search the user's workspace to avoid omissions.\n</tool-calling-guidelines>\n\n<comparison_table>\n- Must use tables for structured data comparison\n</comparison_table>\n\n<interaction_rules>\n## Interaction Guidelines\n- Ask at most ONE follow-up question per response — only if necessary\n- When counting (characters, words, letters), show step-by-step calculations\n- Work within your knowledge cutoff (October 2024)\n- Assume positive and legal intent when queries are ambiguous\n</interaction_rules>\n\n\n## Other Instructions\n- When writing code, use markdown and add comments to explain it.\n- Ask at most one follow-up question per response — and only if appropriate.\n- When counting characters, words, or letters, think step-by-step and show your working.\n- If you encounter ambiguous queries, default to assuming users have legal and positive intent."
++        "template": "### Your Role\nYou are Connaxis AI, a professional and helpful copilot within Connaxis. You assist users with their knowledge management and collaboration tasks. You always respect user privacy and never disclose user information to others.\n\nDon't hold back. Give it your all.\n\n<real_world_info>\nToday is: {{affine::date}}.\nUser's preferred language is {{affine::language}}.\nUser's timezone is {{affine::timezone}}.\n</real_world_info>\n\n{{#affine::hasCurrentDoc}}\n<current_document_context>\nThe user is chatting within the current document: {{currentDocId}}.\nIf the user's request relates to this document, call the doc_read tool with docId {{currentDocId}} to read it before answering.\n</current_document_context>\n{{/affine::hasCurrentDoc}}\n\n<content_analysis>\n- If documents are provided, analyze all documents based on the user's query\n- Identify key information relevant to the user's specific request\n- Use the structure and content of fragments to determine their relevance\n- Disregard irrelevant information to provide focused responses\n</content_analysis>\n\n<content_fragments>\n## Content Fragment Types\n- **Document fragments**: Identified by `document_id` containing `document_content`\n</content_fragments>\n\n<citations>\nAlways use markdown footnote format for citations:\n- Format: [^reference_index]\n- Where reference_index is an increasing positive integer (1, 2, 3...)\n- Place citations immediately after the relevant sentence or paragraph\n- NO spaces within citation brackets: [^1] is correct, [^ 1] or [ ^1] are incorrect\n- DO NOT linked together like [^1, ^6, ^7] and [^1, ^2], if you need to use multiple citations, use [^1][^2]\n \nCitations must appear in two places:\n1. INLINE: Within your main content as [^reference_index]\n2. REFERENCE LIST: At the end of your response as properly formatted JSON\n\nThe citation reference list MUST use these exact JSON formats:\n- For documents: [^reference_index]:{\"type\":\"doc\",\"docId\":\"document_id\"}\n- For files: [^reference_index]:{\"type\":\"attachment\",\"blobId\":\"blob_id\",\"fileName\":\"file_name\",\"fileType\":\"file_type\"}\n- For web url: [^reference_index]:{\"type\":\"url\",\"url\":\"url_path\"}\n</reference_format>\n\nYour complete response MUST follow this structure:\n1. Main content with inline citations [^reference_index]\n2. One empty line\n3. Reference list with all citations in required JSON format\n\nThis sentence contains information from the first source[^1]. This sentence references data from an attachment[^2].\n\n[^1]:{\"type\":\"doc\",\"docId\":\"abc123\"}\n[^2]:{\"type\":\"attachment\",\"blobId\":\"xyz789\",\"fileName\":\"example.txt\",\"fileType\":\"text\"}\n \n</citations>\n\n<formatting_guidelines>\n- Use proper markdown for all content (headings, lists, tables, code blocks)\n- Format code in markdown code blocks with appropriate language tags\n- Add explanatory comments to all code provided\n- Structure longer responses with clear headings and sections\n</formatting_guidelines>\n\n<tool-calling-guidelines>\nBefore starting Tool calling, you need to follow:\n- DO NOT explain what operation you will perform.\n- DO NOT embed a tool call mid-sentence.\n- When searching for unknown information, personal information or keyword, prioritize searching the user's workspace rather than the web.\n- Depending on the complexity of the question and the information returned by the search tools, you can call different tools multiple times to search.\n- Even if the content of the attachment is sufficient to answer the question, it is still necessary to search the user's workspace to avoid omissions.\n</tool-calling-guidelines>\n\n<comparison_table>\n- Must use tables for structured data comparison\n</comparison_table>\n\n<interaction_rules>\n## Interaction Guidelines\n- Ask at most ONE follow-up question per response — only if necessary\n- When counting (characters, words, letters), show step-by-step calculations\n- Work within your knowledge cutoff (October 2024)\n- Assume positive and legal intent when queries are ambiguous\n</interaction_rules>\n\n\n## Other Instructions\n- When writing code, use markdown and add comments to explain it.\n- Ask at most one follow-up question per response — and only if appropriate.\n- When counting characters, words, or letters, think step-by-step and show your working.\n- If you encounter ambiguous queries, default to assuming users have legal and positive intent."
+       },
+       {
+         "role": "user",
+@@ -747,7 +750,7 @@
+   {
+     "name": "mindmap.generate",
+     "action": "mindmap.generate",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "frequencyPenalty": 0.5,
+       "presencePenalty": 0.5,
+@@ -772,7 +775,7 @@
+   {
+     "name": "slides.outline",
+     "action": "slides.outline",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -877,7 +880,7 @@
+   {
+     "name": "workflow:presentation:step1",
+     "action": "workflow:presentation:step1",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "temperature": 0.7
+     },
+@@ -895,7 +898,7 @@
+   {
+     "name": "workflow:presentation:step2",
+     "action": "workflow:presentation:step2",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -914,7 +917,7 @@
+   {
+     "name": "workflow:presentation:step4",
+     "action": "workflow:presentation:step4",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "messages": [
+       {
+         "role": "system",
+@@ -939,7 +942,7 @@
+   {
+     "name": "workflow:brainstorm:step1",
+     "action": "workflow:brainstorm:step1",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "temperature": 0.7
+     },
+@@ -957,7 +960,7 @@
+   {
+     "name": "workflow:brainstorm:step2",
+     "action": "workflow:brainstorm:step2",
+-    "model": "gpt-5-mini",
++    "model": "claude-sonnet-4-6",
+     "config": {
+       "frequencyPenalty": 0.5,
+       "presencePenalty": 0.5,
+diff --git a/packages/backend/server/src/core/auth/config.ts b/packages/backend/server/src/core/auth/config.ts
+index 6e47bf7995..0a49688233 100644
+--- a/packages/backend/server/src/core/auth/config.ts
++++ b/packages/backend/server/src/core/auth/config.ts
+@@ -27,11 +27,13 @@ declare global {
+ defineModuleConfig('auth', {
+   allowSignup: {
+     desc: 'Whether allow new registrations.',
+-    default: true,
++    default: false,
++    env: ['AUTH_ALLOW_SIGNUP', 'boolean'],
+   },
+   allowSignupForOauth: {
+     desc: 'Whether allow new registrations via configured oauth.',
+-    default: true,
++    default: false,
++    env: ['AUTH_ALLOW_SIGNUP_FOR_OAUTH', 'boolean'],
+   },
+   requireEmailDomainVerification: {
+     desc: 'Whether require email domain record verification before accessing restricted resources.',
+@@ -43,7 +45,8 @@ defineModuleConfig('auth', {
+   },
+   newAccountShareActionDelay: {
+     desc: 'Minimum account age in seconds before new accounts can invite members or create share links.',
+-    default: 24 * 60 * 60,
++    default: 0,
++    env: ['AUTH_NEW_ACCOUNT_SHARE_ACTION_DELAY', 'int'],
+     shape: z.number().int().min(0),
+   },
+   passwordRequirements: {
+diff --git a/packages/backend/server/src/core/doc-renderer/controller.ts b/packages/backend/server/src/core/doc-renderer/controller.ts
+index fca8bd3441..796304a837 100644
+--- a/packages/backend/server/src/core/doc-renderer/controller.ts
++++ b/packages/backend/server/src/core/doc-renderer/controller.ts
+@@ -205,8 +205,8 @@ export class DocRendererController {
+     }
+ 
+     const title = opts?.title
+-      ? htmlSanitize(`${opts.title} | AFFiNE`)
+-      : 'AFFiNE';
++      ? htmlSanitize(`${opts.title} | Connaxis Wiki`)
++      : 'Connaxis Wiki';
+     const summary = opts ? htmlSanitize(opts.summary) : assets.description;
+     const image = opts?.avatar ?? 'https://affine.pro/og.jpeg';
+ 
+@@ -233,8 +233,8 @@ export class DocRendererController {
+     ${assets.publicPath.startsWith('/') ? '' : `<link rel="preconnect" href="${assets.publicPath}" />`}
+     <link rel="manifest" href="/manifest.json" />
+     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+-    <link rel="icon" sizes="192x192" href="/favicon-192.png" />
+-    <link rel="shortcut icon" href="/favicon.ico?v=2" />
++    <link rel="icon" sizes="192x192" href="/favicon-192.png?v=3" />
++    <link rel="shortcut icon" type="image/png" href="/favicon-192.png?v=3" />
+     <meta name="emotion-insertion-point" content="" />
+     ${!opts ? '<meta name="robots" content="noindex, nofollow" />' : ''}
+     <meta
+diff --git a/packages/backend/server/src/core/quota/state.ts b/packages/backend/server/src/core/quota/state.ts
+index 435e492a78..44169d008a 100644
+--- a/packages/backend/server/src/core/quota/state.ts
++++ b/packages/backend/server/src/core/quota/state.ts
+@@ -40,9 +40,9 @@ export class QuotaStateService {
+       ]);
+     const flags = {
+       ...resolved.flags,
+-      unlimitedCopilot: entitlements.some(
+-        entitlement => entitlement.plan === 'ai'
+-      ),
++      unlimitedCopilot:
++        env.selfhosted ||
++        entitlements.some(entitlement => entitlement.plan === 'ai'),
+     };
+     const now = new Date();
+ 
+@@ -108,7 +108,7 @@ export class QuotaStateService {
+       ? ownerState.usedStorageQuota
+       : workspaceStorageUsage;
+     const storageQuota = BigInt(quota.storageQuota);
+-    const seatLimit = quota.seatLimit ?? 0;
++    const seatLimit = env.selfhosted ? 150 : (quota.seatLimit ?? 0);
+     const overcapacityMemberCount = Math.max(memberCount - seatLimit, 0);
+     const readonlyReasons = [
+       overcapacityMemberCount > 0 ? 'member_overflow' : null,
+diff --git a/packages/backend/server/src/models/common/feature.ts b/packages/backend/server/src/models/common/feature.ts
+index ca22e21637..1b1a852a71 100644
+--- a/packages/backend/server/src/models/common/feature.ts
++++ b/packages/backend/server/src/models/common/feature.ts
+@@ -97,11 +97,11 @@ const FreeFeature = {
+   configs: {
+     // quota name
+     name: 'Free',
+-    blobLimit: 10 * OneMB,
+-    businessBlobLimit: 100 * OneMB,
+-    storageQuota: 10 * OneGB,
++    blobLimit: 0,
++    businessBlobLimit: 0,
++    storageQuota: 100 * OneGB,
+     historyPeriod: 7 * OneDay,
+-    memberLimit: 3,
++    memberLimit: 150,
+     copilotActionLimit: 10,
+   },
+ } as const;
+diff --git a/packages/backend/server/src/plugins/oauth/service.ts b/packages/backend/server/src/plugins/oauth/service.ts
+index 3da3afb66c..640083af68 100644
+--- a/packages/backend/server/src/plugins/oauth/service.ts
++++ b/packages/backend/server/src/plugins/oauth/service.ts
+@@ -213,7 +213,24 @@ export class OAuthService {
+     }
+ 
+     if (!this.config.auth.allowSignupForOauth) {
+-      throw new SignUpForbidden();
++      // When open signup is disabled, only allow OAuth login for users
++      // that already exist in the system (e.g. invited members).
++      const existingUser = await this.models.user.getUserByEmail(
++        externalAccount.email
++      );
++      if (!existingUser || existingUser.disabled) {
++        throw new SignUpForbidden();
++      }
++
++      await this.models.user.createConnectedAccount({
++        userId: existingUser.id,
++        provider,
++        providerAccountId: externalAccount.id,
++        accessToken: tokens.accessToken,
++        refreshToken: tokens.refreshToken,
++        expiresAt: tokens.expiresAt,
++      });
++      return existingUser;
+     }
+ 
+     const user = await this.models.user.fulfill(externalAccount.email, {
+diff --git a/packages/brand/package.json b/packages/brand/package.json
+new file mode 100644
+index 0000000000..574a7d3476
+--- /dev/null
++++ b/packages/brand/package.json
+@@ -0,0 +1,9 @@
++{
++  "name": "@connaxis/brand",
++  "version": "1.0.0",
++  "private": true,
++  "type": "module",
++  "exports": {
++    ".": "./src/index.ts"
++  }
++}
+diff --git a/packages/brand/src/config.ts b/packages/brand/src/config.ts
+new file mode 100644
+index 0000000000..1d709d3593
+--- /dev/null
++++ b/packages/brand/src/config.ts
+@@ -0,0 +1,4 @@
++export const APP_NAME = 'Connaxis';
++export const APP_DESCRIPTION =
++  'Espacio de trabajo colaborativo para el equipo Connaxis.';
++export const APP_TITLE_SUFFIX = APP_NAME;
+diff --git a/packages/brand/src/index.ts b/packages/brand/src/index.ts
+new file mode 100644
+index 0000000000..d3fe173c0f
+--- /dev/null
++++ b/packages/brand/src/index.ts
+@@ -0,0 +1,2 @@
++export * from './config';
++export * from './logo';
+diff --git a/packages/brand/src/logo.tsx b/packages/brand/src/logo.tsx
+new file mode 100644
+index 0000000000..ed6c45f76a
+--- /dev/null
++++ b/packages/brand/src/logo.tsx
+@@ -0,0 +1,46 @@
++import { memo } from 'react';
++
++import logoUrl from '../assets/logo.png';
++
++/** Horizontal logo — use where AFFiNE showed its text logo (149×48 slot) */
++export const Logo = memo(function Logo() {
++  return (
++    <img
++      src={logoUrl}
++      alt="Connaxis"
++      width={149}
++      height={48}
++      style={{ objectFit: 'contain' }}
++    />
++  );
++});
++
++/** Square icon — use in onboarding / large contexts (120×120 slot) */
++export const AppIcon = memo(function AppIcon() {
++  return (
++    <img
++      src={logoUrl}
++      alt="Connaxis"
++      width={120}
++      height={120}
++      style={{ objectFit: 'contain' }}
++    />
++  );
++});
++
++/** Navbar icon — use in the sidebar workspace selector (size prop in px, default 36) */
++export const NavbarIcon = memo(function NavbarIcon({
++  size = 36,
++}: {
++  size?: number;
++}) {
++  return (
++    <img
++      src={logoUrl}
++      alt="Connaxis"
++      width={size}
++      height={size}
++      style={{ objectFit: 'contain', display: 'block' }}
++    />
++  );
++});
+diff --git a/packages/frontend/admin/src/modules/accounts/components/logo.tsx b/packages/frontend/admin/src/modules/accounts/components/logo.tsx
+index b7200c8715..29fcd69b8c 100644
+--- a/packages/frontend/admin/src/modules/accounts/components/logo.tsx
++++ b/packages/frontend/admin/src/modules/accounts/components/logo.tsx
+@@ -1,16 +1,5 @@
++import { Logo as BrandLogo } from '@connaxis/brand';
++
+ export const Logo = () => {
+-  return (
+-    <svg
+-      width="20"
+-      height="20"
+-      viewBox="0 0 20 20"
+-      fill="none"
+-      xmlns="http://www.w3.org/2000/svg"
+-    >
+-      <path
+-        d="M18.6172 16.2657C18.314 15.7224 17.8091 14.8204 17.3102 13.9295C17.1589 13.6591 17.0086 13.3904 16.8644 13.1326C16.5679 12.6025 16.2978 12.1191 16.1052 11.7741C14.7688 9.38998 12.1376 4.66958 10.823 2.33541C10.418 1.68481 9.47943 1.73636 9.13092 2.4101C8.73553 3.1175 8.3004 3.89538 7.84081 4.71744C7.69509 4.97831 7.54631 5.24392 7.396 5.51268C5.48122 8.93556 3.24035 12.9423 1.64403 15.7961C1.5625 15.9486 1.41067 16.1974 1.33475 16.362C1.20176 16.6591 1.22775 17.0294 1.39538 17.304C1.58441 17.629 1.93802 17.8073 2.29927 17.7889C2.73389 17.7889 3.65561 17.7884 4.84738 17.7889C5.13016 17.7889 5.42823 17.7889 5.73853 17.7889C9.88246 17.7889 16.2127 17.7915 17.7663 17.7889C18.5209 17.7905 18.9942 16.9363 18.6182 16.2652L18.6172 16.2657ZM9.69699 13.2342L8.93424 11.8704C8.80024 11.6305 8.96787 11.3307 9.23588 11.3307H10.7614C11.0299 11.3307 11.1975 11.6305 11.063 11.8704L10.3003 13.2342C10.1663 13.474 9.83099 13.474 9.69648 13.2342H9.69699ZM8.41912 10.6943C8.35594 10.5281 8.30142 10.3593 8.25658 10.1878L10.7802 10.6943H8.41912ZM9.57165 14.2824C9.46414 14.4223 9.3495 14.5553 9.22823 14.6816L8.39109 12.1723L9.57114 14.2824H9.57165ZM12.0061 11.458C12.1768 11.4843 12.346 11.5206 12.5121 11.5658L10.8256 13.5687L12.0061 11.458ZM8.10117 9.33318C8.07417 9.07967 8.06245 8.82353 8.06347 8.56687L11.3962 10.2452L8.10067 9.33371L8.10117 9.33318ZM7.70579 11.8456L8.58828 15.2459C8.38905 15.3969 8.18015 15.5357 7.96411 15.663L7.70528 11.8456H7.70579ZM13.3069 11.8546C13.5332 11.9571 13.7538 12.075 13.9688 12.2043L10.8944 14.345L13.3069 11.8546ZM8.1399 7.48447C8.20104 7.01847 8.2953 6.55932 8.40943 6.1191L13.4725 10.6623L8.14041 7.48447H8.1399ZM7.01793 16.1369C6.59656 16.3152 6.16449 16.4603 5.73802 16.5781L7.01793 9.78129V16.1369ZM14.8386 12.8134C15.1988 13.1011 15.5371 13.4151 15.8494 13.737L9.50643 15.9912L14.8386 12.8134ZM10.2203 3.56456C11.1537 5.23655 12.509 7.66118 13.8002 9.96905L8.97959 4.99304C9.26288 4.48707 9.5314 4.00688 9.77902 3.56351C9.87736 3.38837 10.1219 3.38837 10.2203 3.56351V3.56456ZM2.69109 16.2358C2.95655 15.7629 3.32137 15.1144 3.40238 14.9651C4.17074 13.5913 5.20557 11.7415 6.27454 9.8302L4.50906 16.6307C3.87674 16.6307 3.33156 16.6307 2.91171 16.6307C2.71555 16.6307 2.59275 16.4114 2.69109 16.2363V16.2358ZM17.0871 16.6318C15.6151 16.6318 12.7572 16.6318 9.91965 16.6318L16.5083 14.8094C16.8537 15.4268 17.1304 15.9212 17.3077 16.2379C17.406 16.413 17.2832 16.6318 17.0876 16.6318H17.0871Z"
+-        fill="currentColor"
+-      />
+-    </svg>
+-  );
++  return <BrandLogo />;
+ };
+diff --git a/packages/frontend/admin/src/modules/setup/form.tsx b/packages/frontend/admin/src/modules/setup/form.tsx
+index e500457b42..3c8889c055 100644
+--- a/packages/frontend/admin/src/modules/setup/form.tsx
++++ b/packages/frontend/admin/src/modules/setup/form.tsx
+@@ -28,10 +28,10 @@ const Welcome = () => {
+       style={{ minHeight: '300px' }}
+     >
+       <h1 className="text-5xl font-extrabold max-lg:text-3xl max-lg:font-bold">
+-        Welcome to AFFiNE
++        Welcome to Connaxis Wiki
+       </h1>
+       <p className="mt-5 font-semibold text-xl max-lg:px-4 max-lg:text-lg">
+-        Configure your Self Host AFFiNE with a few simple settings.
++        Configure your self-hosted Connaxis Wiki with a few simple settings.
+       </p>
+     </div>
+   );
+diff --git a/packages/frontend/component/src/components/affine-other-page-layout/layout.tsx b/packages/frontend/component/src/components/affine-other-page-layout/layout.tsx
+index 04c5eada95..aa0ddccea9 100644
+--- a/packages/frontend/component/src/components/affine-other-page-layout/layout.tsx
++++ b/packages/frontend/component/src/components/affine-other-page-layout/layout.tsx
+@@ -1,26 +1,16 @@
+-import { Button } from '@affine/component/ui/button';
+-import { useI18n } from '@affine/i18n';
+-import { Logo1Icon } from '@blocksuite/icons/rc';
++import { NavbarIcon } from '@connaxis/brand';
+ import { useTheme } from 'next-themes';
+-import { type ReactNode, useCallback } from 'react';
++import { type ReactNode } from 'react';
+ 
+ import dotBgDark from './assets/dot-bg.dark.png';
+ import dotBgLight from './assets/dot-bg.light.png';
+-import { DesktopNavbar } from './desktop-navbar';
+ import * as styles from './index.css';
+-import { MobileNavbar } from './mobile-navbar';
+ 
+ export const AffineOtherPageLayout = ({
+   children,
+ }: {
+   children: ReactNode;
+ }) => {
+-  const t = useI18n();
+-
+-  const openDownloadLink = useCallback(() => {
+-    open(BUILD_CONFIG.downloadUrl, '_blank');
+-  }, []);
+-
+   const { resolvedTheme } = useTheme();
+   const backgroundImage =
+     resolvedTheme === 'dark' && dotBgDark ? dotBgDark : dotBgLight;
+@@ -35,17 +25,8 @@ export const AffineOtherPageLayout = ({
+       ) : (
+         <div className={styles.topNav}>
+           <a href="/" rel="noreferrer" className={styles.affineLogo}>
+-            <Logo1Icon width={24} height={24} />
++            <NavbarIcon size={28} />
+           </a>
+-
+-          <DesktopNavbar />
+-          <Button
+-            onClick={openDownloadLink}
+-            className={styles.hideInSmallScreen}
+-          >
+-            {t['com.affine.auth.open.affine.download-app']()}
+-          </Button>
+-          <MobileNavbar />
+         </div>
+       )}
+ 
+diff --git a/packages/frontend/component/src/components/auth-components/auth-header.tsx b/packages/frontend/component/src/components/auth-components/auth-header.tsx
+index e2104dff06..b778277f43 100644
+--- a/packages/frontend/component/src/components/auth-components/auth-header.tsx
++++ b/packages/frontend/component/src/components/auth-components/auth-header.tsx
+@@ -1,4 +1,4 @@
+-import { Logo1Icon } from '@blocksuite/icons/rc';
++import { NavbarIcon } from '@connaxis/brand';
+ import clsx from 'clsx';
+ import type { FC } from 'react';
+ 
+@@ -12,7 +12,7 @@ export const AuthHeader: FC<{
+   return (
+     <div className={clsx(authHeaderWrapper, className)}>
+       <p>
+-        <Logo1Icon className="logo" />
++        <NavbarIcon size={24} />
+         {title}
+       </p>
+       <p>{subTitle}</p>
+diff --git a/packages/frontend/component/src/components/auth-components/logo.tsx b/packages/frontend/component/src/components/auth-components/logo.tsx
+index 6b11ad2705..94e112a6b3 100644
+--- a/packages/frontend/component/src/components/auth-components/logo.tsx
++++ b/packages/frontend/component/src/components/auth-components/logo.tsx
+@@ -1,18 +1 @@
+-export const Logo = () => {
+-  return (
+-    <svg
+-      width="149"
+-      height="48"
+-      viewBox="0 0 149 48"
+-      fill="currentColor"
+-      xmlns="http://www.w3.org/2000/svg"
+-    >
+-      <path d="M41.2519 35.7795C40.6446 34.7245 39.6331 32.973 38.6338 31.243C38.3306 30.718 38.0295 30.1962 37.7406 29.6957C37.1466 28.6663 36.6056 27.7277 36.2197 27.0578C33.5423 22.4283 28.2713 13.2624 25.6378 8.72996C24.8263 7.46664 22.9461 7.56672 22.248 8.87498C21.4559 10.2486 20.5842 11.7591 19.6635 13.3553C19.3715 13.8619 19.0735 14.3776 18.7724 14.8995C14.9365 21.546 10.4473 29.326 7.24932 34.8675C7.08601 35.1637 6.78183 35.6467 6.62974 35.9664C6.36333 36.5434 6.41539 37.2624 6.75121 37.7955C7.1299 38.4266 7.83828 38.7728 8.56198 38.7371C9.43267 38.7371 11.2792 38.7361 13.6667 38.7371C14.2332 38.7371 14.8303 38.7371 15.4519 38.7371C23.7535 38.7371 36.4351 38.7422 39.5473 38.7371C41.059 38.7402 42.0073 37.0816 41.254 35.7785L41.2519 35.7795ZM23.382 29.8929L21.854 27.2447C21.5855 26.779 21.9213 26.1969 22.4582 26.1969H25.5143C26.0522 26.1969 26.388 26.779 26.1186 27.2447L24.5905 29.8929C24.3221 30.3586 23.6504 30.3586 23.381 29.8929H23.382ZM20.822 24.9611C20.6954 24.6384 20.5862 24.3106 20.4964 23.9776L25.5521 24.9611H20.822ZM23.1309 31.9283C22.9155 32.1999 22.6858 32.4583 22.4429 32.7034L20.7659 27.8309L23.1299 31.9283H23.1309ZM28.0079 26.444C28.3499 26.4951 28.6888 26.5655 29.0215 26.6534L25.6429 30.5424L28.0079 26.444ZM20.1851 22.318C20.131 21.8258 20.1075 21.3284 20.1095 20.83L26.7861 24.0889L20.184 22.3191L20.1851 22.318ZM19.393 27.1967L21.1609 33.7992C20.7618 34.0923 20.3433 34.362 19.9105 34.6091L19.3919 27.1967H19.393ZM30.6139 27.214C31.0671 27.4132 31.5091 27.642 31.9398 27.8932L25.7807 32.0498L30.6139 27.214ZM20.2626 18.7283C20.3851 17.8234 20.574 16.9318 20.8026 16.077L30.9456 24.8988L20.2637 18.7283H20.2626ZM18.015 35.5293C17.1708 35.8755 16.3053 36.1574 15.4509 36.3861L18.015 23.1882V35.5293ZM33.6822 29.0758C34.4038 29.6345 35.0816 30.2442 35.7073 30.8692L23.0002 35.2464L33.6822 29.0758ZM24.4303 11.1167C26.3003 14.3633 29.0154 19.0714 31.6019 23.5528L21.9448 13.8905C22.5123 12.908 23.0502 11.9756 23.5463 11.1146C23.7433 10.7746 24.2333 10.7746 24.4303 11.1146V11.1167ZM9.34693 35.7213C9.87873 34.8031 10.6096 33.5439 10.7719 33.2539C12.3111 30.5863 14.3842 26.9945 16.5257 23.2831L12.9889 36.4883C11.7222 36.4883 10.63 36.4883 9.7889 36.4883C9.39592 36.4883 9.14993 36.0624 9.34693 35.7223V35.7213ZM38.1867 36.4903C35.2378 36.4903 29.5125 36.4903 23.828 36.4903L37.0271 32.9516C37.7192 34.1506 38.2734 35.1106 38.6287 35.7254C38.8257 36.0654 38.5797 36.4903 38.1877 36.4903H38.1867Z" />
+-      <path d="M60.656 11.908C60.5365 11.4259 60.1037 11.0879 59.6077 11.0879H57.9326C57.4366 11.0879 57.0038 11.4259 56.8844 11.908L51.205 34.8244C51.0366 35.5056 51.551 36.1643 52.2533 36.1643H52.831C53.3332 36.1643 53.7691 35.8181 53.8824 35.3289L55.0919 30.1296C55.2052 29.6404 55.6411 29.2942 56.1433 29.2942H61.396C61.8982 29.2942 62.334 29.6404 62.4473 30.1296L63.6569 35.3289C63.7702 35.8181 64.2061 36.1643 64.7083 36.1643H65.286C65.9872 36.1643 66.5027 35.5056 66.3343 34.8244L60.6549 11.908H60.656ZM60.3344 26.8891H57.2059C56.5108 26.8891 55.9963 26.2416 56.1545 25.5645L58.245 15.4978C58.3746 14.9412 59.1667 14.9412 59.2963 15.4978L61.3868 25.5645C61.544 26.2416 61.0306 26.8891 60.3354 26.8891H60.3344Z" />
+-      <path d="M101.52 22.0453H88.56C87.9639 22.0453 87.4801 21.5613 87.4801 20.9648V15.5439C87.4801 14.4103 88.3987 13.4911 89.5318 13.4911H95.945C96.5411 13.4911 97.0249 13.007 97.0249 12.4106V12.1665C97.0249 11.5701 96.5411 11.086 95.945 11.086H88.7672C86.5012 11.086 84.6649 12.9243 84.6649 15.1905V22.0433H73.1266C72.5304 22.0433 72.0466 21.5592 72.0466 20.9628V15.5419C72.0466 14.4082 72.9653 13.4891 74.0983 13.4891H80.5116C81.1077 13.4891 81.5915 13.005 81.5915 12.4086V12.1645C81.5915 11.5681 81.1077 11.084 80.5116 11.084H73.3338C71.0677 11.084 69.2314 12.9223 69.2314 15.1885V35.0799C69.2314 35.6763 69.7153 36.1604 70.3114 36.1604H70.9677C71.5638 36.1604 72.0476 35.6763 72.0476 35.0799V25.5269C72.0476 24.9305 72.5315 24.4464 73.1276 24.4464H84.6659V35.0799C84.6659 35.6763 85.1498 36.1604 85.7459 36.1604H86.4022C86.9983 36.1604 87.4821 35.6763 87.4821 35.0799V25.5269C87.4821 24.9305 87.966 24.4464 88.5621 24.4464H100.827C101.96 24.4464 102.879 25.3655 102.879 26.4991V35.0922C102.879 35.6886 103.363 36.1727 103.959 36.1727H104.546C105.142 36.1727 105.626 35.6886 105.626 35.0922V26.1468C105.626 23.8796 103.788 22.0423 101.523 22.0423L101.52 22.0453Z" />
+-      <path d="M122.781 11.0879H122.19C121.595 11.0879 121.112 11.57 121.11 12.1644L121.045 32.7288L115.155 11.8743C115.023 11.4086 114.6 11.0879 114.116 11.0879H111.549C110.953 11.0879 110.469 11.572 110.469 12.1684V35.0849C110.469 35.6813 110.953 36.1654 111.549 36.1654H112.14C112.735 36.1654 113.218 35.6833 113.22 35.089L113.285 14.5245L119.175 35.379C119.306 35.8447 119.73 36.1654 120.214 36.1654H122.781C123.377 36.1654 123.861 35.6813 123.861 35.0849V12.1674C123.861 11.571 123.377 11.0869 122.781 11.0869V11.0879Z" />
+-      <path d="M132.074 13.492H138.179C138.775 13.492 139.259 13.0079 139.259 12.4115V12.1674C139.259 11.571 138.775 11.0869 138.179 11.0869H131.345C129.079 11.0869 127.243 12.9252 127.243 15.1914V32.0578C127.243 34.325 129.08 36.1623 131.345 36.1623H138.179C138.775 36.1623 139.259 35.6782 139.259 35.0818V34.8377C139.259 34.2413 138.775 33.7572 138.179 33.7572H132.074C130.941 33.7572 130.023 32.8381 130.023 31.7044V25.1846C130.023 24.5882 130.506 24.1041 131.103 24.1041H137.835C138.431 24.1041 138.915 23.62 138.915 23.0236V22.7795C138.915 22.1831 138.431 21.699 137.835 21.699H131.103C130.506 21.699 130.023 21.2149 130.023 20.6185V15.5407C130.023 14.4071 130.941 13.4879 132.074 13.4879V13.492Z" />
+-      <path d="M103.979 14.1446C103.499 13.6646 102.681 13.8842 102.506 14.5398L101.713 17.5025C101.537 18.1572 102.136 18.7567 102.792 18.582L105.753 17.7885C106.408 17.6128 106.626 16.7938 106.148 16.3148L103.981 14.1466L103.979 14.1446Z" />
+-    </svg>
+-  );
+-};
++export { Logo } from '@connaxis/brand';
+diff --git a/packages/frontend/component/src/components/member-components/invite-team-modal/link-invite.tsx b/packages/frontend/component/src/components/member-components/invite-team-modal/link-invite.tsx
+index 5efdd3ad77..008f582650 100644
+--- a/packages/frontend/component/src/components/member-components/invite-team-modal/link-invite.tsx
++++ b/packages/frontend/component/src/components/member-components/invite-team-modal/link-invite.tsx
+@@ -6,7 +6,7 @@ import { useI18n } from '@affine/i18n';
+ import { CloseIcon } from '@blocksuite/icons/rc';
+ import { cssVar } from '@toeverything/theme';
+ import { cssVarV2 } from '@toeverything/theme/v2';
+-import { useCallback, useMemo, useState } from 'react';
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ 
+ import { Button, IconButton } from '../../../ui/button';
+ import Input from '../../../ui/input';
+@@ -41,6 +41,13 @@ const getMenuItems = (t: ReturnType<typeof useI18n>) => [
+   },
+ ];
+ 
++const EXPIRE_TIME_MS: Record<WorkspaceInviteLinkExpireTime, number> = {
++  [WorkspaceInviteLinkExpireTime.OneDay]: 86400000,
++  [WorkspaceInviteLinkExpireTime.ThreeDays]: 259200000,
++  [WorkspaceInviteLinkExpireTime.OneWeek]: 604800000,
++  [WorkspaceInviteLinkExpireTime.OneMonth]: 2592000000,
++};
++
+ export const LinkInvite = ({
+   invitationLink,
+   copyTextToClipboard,
+@@ -56,9 +63,51 @@ export const LinkInvite = ({
+ }) => {
+   const t = useI18n();
+   const [selectedValue, setSelectedValue] = useState(
+-    WorkspaceInviteLinkExpireTime.OneWeek
++    WorkspaceInviteLinkExpireTime.OneMonth
+   );
+   const menuItems = getMenuItems(t);
++
++  // Local state so the link appears immediately when the mutation resolves,
++  // without waiting for the LiveData → prop propagation chain.
++  const [localLink, setLocalLink] = useState<InviteLink | null>(
++    invitationLink
++  );
++  const autoGeneratedRef = useRef(false);
++
++  // Sync from parent prop when it arrives (e.g. from the live query on mount).
++  useEffect(() => {
++    if (invitationLink) {
++      setLocalLink(invitationLink);
++    }
++  }, [invitationLink]);
++
++  const generate = useCallback(
++    async (expireTime: WorkspaceInviteLinkExpireTime) => {
++      try {
++        const link = await generateInvitationLink(expireTime);
++        setLocalLink({
++          link,
++          expireTime: new Date(
++            Date.now() + EXPIRE_TIME_MS[expireTime]
++          ).toISOString(),
++        });
++      } catch (err) {
++        console.error('Failed to generate invitation link:', err);
++        notify.error({
++          title: 'Failed to generate invitation link',
++          message: err instanceof Error ? err.message : String(err),
++        });
++      }
++    },
++    [generateInvitationLink]
++  );
++
++  useEffect(() => {
++    if (autoGeneratedRef.current) return;
++    autoGeneratedRef.current = true;
++    generate(WorkspaceInviteLinkExpireTime.OneMonth).catch(() => {});
++  }, [generate]);
++
+   const items = useMemo(() => {
+     return menuItems.map(item => (
+       <MenuItem key={item.value} onSelect={() => setSelectedValue(item.value)}>
+@@ -73,20 +122,14 @@ export const LinkInvite = ({
+   );
+ 
+   const onGenerate = useCallback(() => {
+-    generateInvitationLink(selectedValue).catch(err => {
+-      console.error('Failed to generate invitation link: ', err);
+-      notify.error({
+-        title: 'Failed to generate invitation link',
+-        message: err.message,
+-      });
+-    });
+-  }, [generateInvitationLink, selectedValue]);
++    generate(selectedValue).catch(() => {});
++  }, [generate, selectedValue]);
+ 
+   const onCopy = useCallback(() => {
+-    if (!invitationLink) {
++    if (!localLink) {
+       return;
+     }
+-    copyTextToClipboard(invitationLink.link)
++    copyTextToClipboard(localLink.link)
+       .then(() =>
+         notify.success({
+           title: t['Copied link to clipboard'](),
+@@ -99,25 +142,30 @@ export const LinkInvite = ({
+           message: err.message,
+         });
+       });
+-  }, [copyTextToClipboard, invitationLink, t]);
++  }, [copyTextToClipboard, localLink, t]);
+ 
+   const onReset = useCallback(() => {
+-    revokeInvitationLink().catch(err => {
+-      console.error('Failed to revoke invitation link: ', err);
+-      notify.error({
+-        title: 'Failed to revoke invitation link',
+-        message: err.message,
++    revokeInvitationLink()
++      .then(() => {
++        setLocalLink(null);
++        autoGeneratedRef.current = false;
++      })
++      .catch(err => {
++        console.error('Failed to revoke invitation link: ', err);
++        notify.error({
++          title: 'Failed to revoke invitation link',
++          message: err.message,
++        });
+       });
+-    });
+   }, [revokeInvitationLink]);
+ 
+   const expireTime = useMemo(() => {
+     return t['com.affine.payment.member.team.invite.expire-at']({
+-      expireTime: invitationLink?.expireTime
+-        ? new Date(invitationLink.expireTime).toLocaleString()
++      expireTime: localLink?.expireTime
++        ? new Date(localLink.expireTime).toLocaleString()
+         : '',
+     });
+-  }, [invitationLink, t]);
++  }, [localLink, t]);
+ 
+   return (
+     <>
+@@ -125,7 +173,7 @@ export const LinkInvite = ({
+         <div className={styles.modalSubTitle}>
+           {t['com.affine.payment.member.team.invite.link-expiration']()}
+         </div>
+-        {invitationLink ? (
++        {localLink ? (
+           <Input
+             value={expireTime}
+             disabled
+@@ -155,8 +203,8 @@ export const LinkInvite = ({
+         <div className={styles.invitationLinkContent}>
+           <Input
+             value={
+-              invitationLink
+-                ? invitationLink.link
++              localLink
++                ? localLink.link
+                 : 'https://your-app.com/invite/xxxxxxxx'
+             }
+             inputMode="none"
+@@ -164,12 +212,12 @@ export const LinkInvite = ({
+             inputStyle={{
+               fontSize: cssVar('fontXs'),
+               color: cssVarV2(
+-                invitationLink ? 'text/primary' : 'text/placeholder'
++                localLink ? 'text/primary' : 'text/placeholder'
+               ),
+               backgroundColor: cssVarV2('layer/background/primary'),
+             }}
+           />
+-          {invitationLink ? (
++          {localLink ? (
+             <>
+               <Button onClick={onCopy} variant="secondary">
+                 {t['com.affine.payment.member.team.invite.copy']()}
+diff --git a/packages/frontend/core/src/blocksuite/ai/blocks/ai-chat-block/components/user-info.ts b/packages/frontend/core/src/blocksuite/ai/blocks/ai-chat-block/components/user-info.ts
+index 72fa6a212b..f3d7440141 100644
+--- a/packages/frontend/core/src/blocksuite/ai/blocks/ai-chat-block/components/user-info.ts
++++ b/packages/frontend/core/src/blocksuite/ai/blocks/ai-chat-block/components/user-info.ts
+@@ -109,7 +109,7 @@ export function UserInfoTemplate(
+         .avatarUrl=${userInfo.avatarUrl}
+       ></user-info>`
+     : html`<user-info
+-        .userName=${'AFFiNE AI'}
++        .userName=${'Connaxis AI'}
+         .avatarIcon=${AffineAIIcon}
+       ></user-info>`;
+ 
+diff --git a/packages/frontend/core/src/blocksuite/ai/components/ai-chat-messages/ai-chat-messages.ts b/packages/frontend/core/src/blocksuite/ai/components/ai-chat-messages/ai-chat-messages.ts
+index d6bab64503..ac7c06b470 100644
+--- a/packages/frontend/core/src/blocksuite/ai/components/ai-chat-messages/ai-chat-messages.ts
++++ b/packages/frontend/core/src/blocksuite/ai/components/ai-chat-messages/ai-chat-messages.ts
+@@ -353,7 +353,7 @@ export class AIChatMessages extends WithDisposable(ShadowlessElement) {
+               >
+                 ${this.isHistoryLoading
+                   ? html`<span data-testid="chat-panel-loading-state"
+-                      >AFFiNE AI is loading history...</span
++                      >Connaxis AI is loading history...</span
+                     >`
+                   : html`<span data-testid="chat-panel-empty-state"
+                       >What can I help you with?</span
+diff --git a/packages/frontend/core/src/blocksuite/ai/components/ai-message-content/assistant-avatar.ts b/packages/frontend/core/src/blocksuite/ai/components/ai-message-content/assistant-avatar.ts
+index dd12f9ba2b..b002aa2e32 100644
+--- a/packages/frontend/core/src/blocksuite/ai/components/ai-message-content/assistant-avatar.ts
++++ b/packages/frontend/core/src/blocksuite/ai/components/ai-message-content/assistant-avatar.ts
+@@ -28,7 +28,7 @@ export class AssistantAvatar extends ShadowlessElement {
+     return html`${this.status === 'transmitting'
+       ? AIStarIconWithAnimation
+       : AffineAvatarIcon}
+-    AFFiNE AI`;
++    Connaxis AI`;
+   }
+ }
+ 
+diff --git a/packages/frontend/core/src/blocksuite/ai/components/playground/chat.ts b/packages/frontend/core/src/blocksuite/ai/components/playground/chat.ts
+index 00aa2e0780..ec483e1efe 100644
+--- a/packages/frontend/core/src/blocksuite/ai/components/playground/chat.ts
++++ b/packages/frontend/core/src/blocksuite/ai/components/playground/chat.ts
+@@ -337,7 +337,7 @@ export class PlaygroundChat extends SignalWatcher(
+             ? html`<span data-testid="chat-panel-embedding-progress"
+                 >Embedding ${done}/${total}</span
+               >`
+-            : 'AFFiNE AI'}
++            : 'Connaxis AI'}
+         </div>
+         <div class="chat-panel-add" @click=${this.addChat}>
+           ${NewPageIcon()}
+diff --git a/packages/frontend/core/src/blocksuite/ai/extensions/ai-slash-menu.ts b/packages/frontend/core/src/blocksuite/ai/extensions/ai-slash-menu.ts
+index 423cae9b55..d3dca78c34 100644
+--- a/packages/frontend/core/src/blocksuite/ai/extensions/ai-slash-menu.ts
++++ b/packages/frontend/core/src/blocksuite/ai/extensions/ai-slash-menu.ts
+@@ -94,20 +94,20 @@ export function AiSlashMenuConfigExtension() {
+     ).map<SlashMenuActionItem>(item => ({
+       ...actionItemWrapper(item),
+       name: `${item.name} from above`,
+-      group: `1_AFFiNE AI@${index++}`,
++      group: `1_Connaxis AI@${index++}`,
+     })),
+ 
+     ...AIItems.filter(({ name }) =>
+       ['Summarize', 'Continue writing'].includes(name)
+     ).map<SlashMenuActionItem>(item => ({
+       ...actionItemWrapper(item),
+-      group: `1_AFFiNE AI@${index++}`,
++      group: `1_Connaxis AI@${index++}`,
+     })),
+ 
+     {
+       name: 'Action with above',
+       icon: iconWrapper(MoreHorizontalIcon({ width: '24px', height: '24px' })),
+-      group: `1_AFFiNE AI@${index++}`,
++      group: `1_Connaxis AI@${index++}`,
+       subMenu: [
+         ...AIItems.filter(({ name }) =>
+           ['Translate to', 'Change tone to'].includes(name)
+diff --git a/packages/frontend/core/src/blocksuite/ai/messages/error.ts b/packages/frontend/core/src/blocksuite/ai/messages/error.ts
+index d9d70deafa..9b548d972e 100644
+--- a/packages/frontend/core/src/blocksuite/ai/messages/error.ts
++++ b/packages/frontend/core/src/blocksuite/ai/messages/error.ts
+@@ -188,7 +188,7 @@ export class AIErrorWrapper extends SignalWatcher(WithDisposable(LitElement)) {
+ 
+ const PaymentRequiredErrorRenderer = (host?: EditorHost | null) => html`
+   <ai-error-wrapper
+-    .text=${"You've reached the current usage cap for AFFiNE AI. You can subscribe to AFFiNE AI(with free 7-day-trial) to continue the AI experience!"}
++    .text=${"You've reached the usage limit for Connaxis AI. Please contact oscar.escalante@connaxis.com for support."}
+     .actionText=${'Upgrade'}
+     .onClick=${() => AIAppEvents.requestUpgradePlan.next({ host })}
+   ></ai-error-wrapper>
+@@ -196,7 +196,7 @@ const PaymentRequiredErrorRenderer = (host?: EditorHost | null) => html`
+ 
+ const LoginRequiredErrorRenderer = (host?: EditorHost | null) => html`
+   <ai-error-wrapper
+-    .text=${'You need to login to AFFiNE Cloud to continue using AFFiNE AI.'}
++    .text=${'You need to login to continue using Connaxis AI.'}
+     .actionText=${'Login'}
+     .onClick=${() => AIAppEvents.requestLogin.next({ host })}
+   ></ai-error-wrapper>
+@@ -214,7 +214,7 @@ const generalErrorText =
+ 
+ const GeneralErrorRenderer = (props: ErrorProps = {}) => {
+   const onClick = () => {
+-    window.open('mailto:support@toeverything.info', '_blank');
++    window.open('mailto:oscar.escalante@connaxis.com', '_blank');
+   };
+ 
+   return html`<ai-error-wrapper
+@@ -222,7 +222,7 @@ const GeneralErrorRenderer = (props: ErrorProps = {}) => {
+     .errorMessage=${props.errorMessage ?? ''}
+     .showDetailPanel=${!!props.errorMessage}
+     .actionText=${props.actionText ?? 'Contact us'}
+-    .actionTooltip=${props.actionTooltip ?? 'support@toeverything.info'}
++    .actionTooltip=${props.actionTooltip ?? 'oscar.escalante@connaxis.com'}
+     .onClick=${onClick}
+   ></ai-error-wrapper>`;
+ };
+diff --git a/packages/frontend/core/src/blocksuite/ai/provider/prompt.ts b/packages/frontend/core/src/blocksuite/ai/provider/prompt.ts
+index d62f45803d..877672b71b 100644
+--- a/packages/frontend/core/src/blocksuite/ai/provider/prompt.ts
++++ b/packages/frontend/core/src/blocksuite/ai/provider/prompt.ts
+@@ -2,7 +2,7 @@
+ // TODO(@Peng): automate this
+ export const promptKeys = [
+   // text actions
+-  'Chat With AFFiNE AI',
++  'Chat With Connaxis AI',
+   'Summary',
+   'Summary as title',
+   'Generate a caption',
+diff --git a/packages/frontend/core/src/blocksuite/ai/runtime/chat/session-strategy.ts b/packages/frontend/core/src/blocksuite/ai/runtime/chat/session-strategy.ts
+index ba33edc9f7..1e7db18bb8 100644
+--- a/packages/frontend/core/src/blocksuite/ai/runtime/chat/session-strategy.ts
++++ b/packages/frontend/core/src/blocksuite/ai/runtime/chat/session-strategy.ts
+@@ -89,7 +89,7 @@ export class DocAIChatSessionStrategy implements AIChatSessionStrategy {
+     return request.createSessionWithHistory({
+       workspaceId: scope.workspaceId,
+       docId: scope.docId,
+-      promptName: 'Chat With AFFiNE AI',
++      promptName: 'Chat With Connaxis AI',
+       reuseLatestChat: false,
+       pinned: options.pinned,
+     });
+@@ -145,7 +145,7 @@ export class WorkspaceAIChatSessionStrategy implements AIChatSessionStrategy {
+   ) {
+     return request.createSessionWithHistory({
+       workspaceId: scope.workspaceId,
+-      promptName: 'Chat With AFFiNE AI',
++      promptName: 'Chat With Connaxis AI',
+       reuseLatestChat: false,
+       pinned: options.pinned,
+     });
+@@ -193,7 +193,7 @@ export class ForkAIChatSessionStrategy implements AIChatSessionStrategy {
+       return request.createSessionWithHistory({
+         workspaceId: scope.workspaceId,
+         docId,
+-        promptName: 'Chat With AFFiNE AI',
++        promptName: 'Chat With Connaxis AI',
+         reuseLatestChat: false,
+         pinned: options.pinned,
+       });
+diff --git a/packages/frontend/core/src/blocksuite/ai/runtime/request/action-definitions.ts b/packages/frontend/core/src/blocksuite/ai/runtime/request/action-definitions.ts
+index c414b36bca..09de8a969d 100644
+--- a/packages/frontend/core/src/blocksuite/ai/runtime/request/action-definitions.ts
++++ b/packages/frontend/core/src/blocksuite/ai/runtime/request/action-definitions.ts
+@@ -49,7 +49,7 @@ const textAction = (
+ export const actionDefinitions = {
+   chat: {
+     id: 'chat',
+-    promptName: 'Chat With AFFiNE AI',
++    promptName: 'Chat With Connaxis AI',
+     responseType: 'text',
+     timeout: 5 * 60 * 1000,
+     endpoint: Endpoint.StreamObject,
+diff --git a/packages/frontend/core/src/blocksuite/ai/widgets/ai-panel/components/state/error.ts b/packages/frontend/core/src/blocksuite/ai/widgets/ai-panel/components/state/error.ts
+index 84d0c27109..ceeafc49d0 100644
+--- a/packages/frontend/core/src/blocksuite/ai/widgets/ai-panel/components/state/error.ts
++++ b/packages/frontend/core/src/blocksuite/ai/widgets/ai-panel/components/state/error.ts
+@@ -146,7 +146,7 @@ export class AIPanelError extends WithDisposable(LitElement) {
+           AIErrorType.Unauthorized,
+           () =>
+             html` <div class="error-info">
+-                You need to login to AFFiNE Cloud to continue using AFFiNE AI.
++                You need to login to continue using Connaxis AI.
+               </div>
+               <div class="action-button-group">
+                 <div @click=${this.config.cancel} class="action-button">
+@@ -161,8 +161,8 @@ export class AIPanelError extends WithDisposable(LitElement) {
+           AIErrorType.PaymentRequired,
+           () =>
+             html` <div class="error-info">
+-                You've reached the current usage cap for AFFiNE AI. You can
+-                subscribe to AFFiNE AI(with free 7-day-trial) to continue the AI
++                You've reached the usage limit for Connaxis AI. Please contact
++                oscar.escalante@connaxis.com for
+                 experience!
+               </div>
+               <div class="action-button-group">
+@@ -198,8 +198,8 @@ export class AIPanelError extends WithDisposable(LitElement) {
+           <div class="error-info">
+             ${error}. Please try again later. If this issue persists, please let
+             us know at
+-            <a href="mailto:support@toeverything.info">
+-              support@toeverything.info
++            <a href="mailto:oscar.escalante@connaxis.com">
++              oscar.escalante@connaxis.com
+             </a>
+           </div>
+         `;
+diff --git a/packages/frontend/core/src/blocksuite/block-suite-header/menu/index.tsx b/packages/frontend/core/src/blocksuite/block-suite-header/menu/index.tsx
+index 756ee4b61e..146846f651 100644
+--- a/packages/frontend/core/src/blocksuite/block-suite-header/menu/index.tsx
++++ b/packages/frontend/core/src/blocksuite/block-suite-header/menu/index.tsx
+@@ -15,7 +15,6 @@ import { IsFavoriteIcon } from '@affine/core/components/pure/icons';
+ import { useDetailPageHeaderResponsive } from '@affine/core/desktop/pages/workspace/detail-page/use-header-responsive';
+ import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
+ import { EditorService } from '@affine/core/modules/editor';
+-import { OpenInAppService } from '@affine/core/modules/open-in-app/services';
+ import { GuardService } from '@affine/core/modules/permissions';
+ import { ShareMenuContent } from '@affine/core/modules/share-menu';
+ import { WorkbenchService } from '@affine/core/modules/workbench';
+@@ -32,7 +31,6 @@ import {
+   HistoryIcon,
+   ImportIcon,
+   InformationIcon,
+-  LocalWorkspaceIcon,
+   OpenInNewIcon,
+   PageIcon,
+   ShareIcon,
+@@ -42,7 +40,6 @@ import {
+ import {
+   useLiveData,
+   useService,
+-  useServiceOptional,
+ } from '@toeverything/infra';
+ import { useCallback, useState } from 'react';
+ 
+@@ -150,8 +147,6 @@ const PageHeaderMenuItem = ({
+   const primaryMode = useLiveData(editorService.editor.doc.primaryMode$);
+ 
+   const workbench = useService(WorkbenchService).workbench;
+-  const openInAppService = useServiceOptional(OpenInAppService);
+-
+   const { favorite, toggleFavorite } = useFavorite(pageId);
+ 
+   const { duplicate } = useBlockSuiteMetaHelper();
+@@ -334,10 +329,6 @@ const PageHeaderMenuItem = ({
+     </>
+   );
+ 
+-  const onOpenInDesktop = useCallback(() => {
+-    openInAppService?.showOpenInAppPage();
+-  }, [openInAppService]);
+-
+   const canEdit = useGuard('Doc_Update', pageId);
+   const canMoveToTrash = useGuard('Doc_Trash', pageId);
+ 
+@@ -447,15 +438,6 @@ const PageHeaderMenuItem = ({
+         onSelect={handleOpenTrashModal}
+         disabled={!canMoveToTrash}
+       />
+-      {BUILD_CONFIG.isWeb && workspace.flavour !== 'local' ? (
+-        <MenuItem
+-          prefixIcon={<LocalWorkspaceIcon />}
+-          data-testid="editor-option-menu-link"
+-          onSelect={onOpenInDesktop}
+-        >
+-          {t['com.affine.header.option.open-in-desktop']()}
+-        </MenuItem>
+-      ) : null}
+     </>
+   );
+ };
+diff --git a/packages/frontend/core/src/components/affine/onboarding/assets/logo.tsx b/packages/frontend/core/src/components/affine/onboarding/assets/logo.tsx
+index 3d3c2f277c..25564aedd0 100644
+--- a/packages/frontend/core/src/components/affine/onboarding/assets/logo.tsx
++++ b/packages/frontend/core/src/components/affine/onboarding/assets/logo.tsx
+@@ -1,101 +1,6 @@
++import { AppIcon } from '@connaxis/brand';
+ import { memo } from 'react';
+ 
+ export default memo(function Logo() {
+-  return (
+-    <svg
+-      width="120"
+-      height="120"
+-      viewBox="0 0 120 120"
+-      fill="none"
+-      xmlns="http://www.w3.org/2000/svg"
+-    >
+-      <g clipPath="url(#clip0_6096_19874)">
+-        <rect width="120" height="120" fill="white" />
+-        <path
+-          opacity="0.4"
+-          fillRule="evenodd"
+-          clipRule="evenodd"
+-          d="M-14.6534 -15.0049H-14.8878V-14.7705V3.80879H-14.8878V4.04316V22.6213V22.7107V22.8557V22.9451V41.5232V41.7576V60.2502V60.4846V79.1521V79.3865H-14.8877V97.8752H-14.8878V98.1096V116.777V117.012H-14.8877V135.591V135.825H-14.6533H3.92549H4.01425H4.15986H4.24863H22.739H22.8274H22.9733H23.0618H41.5527H41.6409H41.7871H41.8753H60.3659H60.4547H60.6003H60.6891H79.1791H79.2679H79.4135H79.5022H97.9928H98.081H98.2271H98.3154H116.807H116.895H117.041H117.129H135.708H135.943V135.591V116.923V116.689H135.943V98.199H135.943V97.9646V79.2971V79.0627H135.943L135.943 60.5729V60.3385V41.6709V41.4365L135.943 22.9451V22.8557V22.7107V22.6213L135.943 4.13144V3.89707V-14.7705V-15.0049H135.708H117.129H117.041H116.895H116.806H98.3153H98.2271H98.0809H97.9927H79.5022H79.4134H79.2679H79.179H60.6891H60.6003H60.4547H60.3659H41.8753H41.7871H41.6409H41.5527H23.0617H22.9733H22.8273H22.739H4.24853H4.15977H4.01416H3.92539H-14.6534ZM117.129 135.591V117.012H135.708H135.708V117.158V135.356V135.591H135.474H117.275H117.129ZM135.708 116.689V116.543V98.3439V98.199H117.129L117.129 116.689H135.708ZM116.807 117.012H116.806H98.3154V135.591H98.4615H116.66H116.807V117.012ZM116.806 116.689V98.199H98.3154H98.3153V116.689H98.3154H116.806ZM116.807 97.8752H116.806H98.3154V79.3865H116.806H116.807V97.8752ZM135.708 97.8752H135.708V97.7303V79.5314V79.3865H135.708H117.129V97.8752H135.708ZM97.9927 117.012H79.5023L79.5022 135.591H79.6479H97.8467H97.9928L97.9927 117.012ZM97.9927 116.689V98.199H79.5024H79.5023V116.689H97.9927ZM97.9928 97.8752H97.9927H79.5024V79.3865H97.9928V97.8752ZM79.1791 117.012H79.179H60.6891V135.591H60.8347H79.0335H79.1791V117.012ZM79.179 116.689V98.199H60.6891V116.689H79.179ZM79.1791 97.8752H79.179H60.6891V79.3865H79.179H79.1791V97.8752ZM60.366 116.689V98.199H41.8753V116.689H60.366ZM60.366 117.012L60.3659 135.591H60.2203H42.0215H41.8753L41.8753 117.012H60.366ZM60.3661 97.8752H60.366H41.8753V79.3865H60.366H60.3661V97.8752ZM41.5527 116.689V98.199H23.0619H23.0617L23.0618 116.689H41.5527ZM41.5527 117.012H23.0618V135.591H23.2077H41.4065H41.5527V117.012ZM23.0619 97.8752H41.5527V79.3865H23.0619V97.8752ZM22.739 116.689V98.199H4.24863H4.24851V116.689H4.24863H22.739ZM22.739 117.012L22.739 135.591H22.5931H4.39424H4.24863V117.012H22.739ZM4.24863 97.8752H22.739V79.3865H4.24863V97.8752ZM3.92542 117.012H-14.6533V117.158V135.356V135.591H-14.4189H3.77988H3.92549L3.92542 117.012ZM3.92542 116.689V98.199H-14.6533H-14.6534V98.3439V116.543V116.689H-14.6533H3.92542ZM3.92554 97.8752H3.92542H-14.6533V97.7303V79.5314V79.3865H3.92542H3.92554V97.8752ZM135.708 79.0627V78.9178V60.7189L135.708 60.5729H117.129L117.129 79.0627H135.708ZM116.806 79.0627L116.806 60.5729H98.3153L98.3153 79.0627H98.3154H116.806ZM135.708 60.1041L135.708 60.2502H117.129L117.129 41.7576H135.708L135.708 41.9053V60.1041ZM98.3153 60.2502H116.806L116.806 41.7576H98.3153V60.2502ZM97.9928 79.0627L97.9928 60.5729H79.5022L79.5023 79.0627H79.5024H97.9928ZM79.179 79.0627L79.179 60.5729H60.6891V79.0627H79.179ZM79.5023 60.2502H97.9928V41.7576H97.9927H79.5023V60.2502ZM60.6891 60.2502H79.179L79.179 41.7576H60.6891V60.2502ZM41.8753 60.5729H60.3659L60.366 79.0627H41.8753L41.8753 60.5729ZM60.366 41.7576L60.3659 60.2502H41.8753V41.7576H60.366ZM41.5527 79.0627V60.5729H23.0617L23.0617 79.0627H23.0619H41.5527ZM23.0617 60.2502H41.5527V41.7576H23.0617V60.2502ZM22.739 79.0627L22.739 60.5729H4.24853L4.24851 79.0627H4.24863H22.739ZM-14.6534 60.5729H3.92539L3.92542 79.0627H-14.6533H-14.6534V78.9178V60.7189V60.5729H-14.6534ZM4.24853 60.2502H22.739V41.7576H4.24853V60.2502ZM3.92542 41.7576L3.92539 60.2502H-14.6534V60.1041V41.9053V41.7576H3.92542ZM135.708 41.4365L135.708 41.2889V23.09V22.9451H117.129L117.129 41.4365H135.708ZM98.3153 22.9451H116.806V41.4365H98.3153L98.3153 22.9451ZM117.129 22.6213H135.708V22.4764V4.27754L135.708 4.13144H117.129V22.6213ZM98.3153 22.6213H116.806L116.806 4.13144H98.3153L98.3153 22.6213ZM79.5023 22.9451H97.9927V41.4365H79.5023V22.9451ZM79.5023 22.6213H97.9927V4.13144H79.5023V22.6213ZM60.6891 22.9451H79.179V41.4365H60.6891V22.9451ZM60.6891 22.6213H79.179L79.179 4.13144H60.6891V22.6213ZM60.366 41.4365V22.9451H41.8753V41.4365H60.366ZM41.8753 22.6213H60.366L60.3659 4.13144H41.8753V22.6213ZM41.5527 41.4365V22.9451H23.0617V41.4365H41.5527ZM23.0617 22.6213H41.5527V4.13144H23.0617V22.6213ZM22.739 41.4365V22.9451H4.24851L4.24853 41.4365H22.739H22.739ZM4.24851 22.6213H22.739V4.13144H22.739H4.24853H4.24851V22.6213ZM3.92542 41.4365V22.9451H-14.6534V23.09V41.2889V41.4365H-14.6534H3.92542ZM-14.6534 22.6213H3.92542V4.13144H3.92539H-14.6534H-14.6534V4.27754V22.4764V22.6213ZM135.708 3.80879L135.708 3.66269V-14.5361V-14.7705H135.474H117.275H117.129V3.80879H135.708ZM116.806 3.80879V-14.7705H116.66H98.4614H98.3153V3.80879H116.806ZM97.9927 3.80879V-14.7705H97.8466H79.6478H79.5022L79.5023 3.80879H97.9927ZM79.179 3.80879V-14.7705H79.0335H60.8347H60.6891V3.80879H79.179ZM60.3659 3.80879V-14.7705H60.2203H42.0215H41.8753V3.80879H41.8753H60.3659ZM41.5527 3.80879V-14.7705H41.4065H23.2077H23.0617L23.0617 3.80879H41.5527ZM22.739 3.80879V-14.7705H22.593H4.39414H4.24853V3.80879H22.739ZM3.92539 3.80879V-14.7705H3.77978H-14.419H-14.6534V-14.5361V3.66269V3.80879H3.92539Z"
+-          fill="url(#paint0_radial_6096_19874)"
+-        />
+-        <g filter="url(#filter0_di_6096_19874)">
+-          <path
+-            fillRule="evenodd"
+-            clipRule="evenodd"
+-            d="M53.7056 26.3403C56.0371 22.3021 57.7872 19.2714 58.607 17.8517L58.6042 17.8545C59.2324 16.7486 60.871 16.7625 61.4991 17.8545C61.8015 18.3604 62.3791 19.3716 62.9726 20.4105L62.9733 20.4116L62.9733 20.4117C63.6345 21.5692 64.3152 22.7607 64.6564 23.3258C69.4094 31.566 75.1171 41.4534 80.9167 51.5001L80.9263 51.5166C83.6334 56.2061 86.3604 60.9301 89.0196 65.5373L53.7056 26.3403ZM46.0443 39.6113C35.1951 58.4062 21.1805 82.6946 18.849 86.7797C18.4358 87.7739 19.1979 89.0279 20.2811 89.0475C20.4956 89.0681 21.7625 89.0659 22.5802 89.0644C22.8688 89.0639 23.1015 89.0635 23.2122 89.0642C25.3423 89.0651 27.6158 89.0657 30.0033 89.0662L46.0443 39.6113ZM63.9558 89.0649H64.023H64.084C76.828 89.0633 89.3663 89.0617 98.9988 89.0642L99.1086 89.0643C99.4211 89.0646 99.8052 89.0649 99.8251 89.0475C99.9015 89.054 99.9684 89.0387 100.034 89.0237L100.034 89.0237C100.081 89.013 100.128 89.0024 100.177 89C101.079 88.7291 101.623 87.6678 101.257 86.7825C101.222 86.7309 101.207 86.6977 101.186 86.6498L101.185 86.6497L101.185 86.6496C101.155 86.5808 101.111 86.4817 100.972 86.2546C99.5197 83.7349 97.9768 81.0598 96.3686 78.2722L45.7317 89.0668C51.6017 89.0665 57.7223 89.0657 63.8007 89.0649H63.8819H63.9558ZM63.9948 13.2659C60.832 10.9422 56.1867 11.9281 54.2549 15.3382C52.7098 18.0368 48.0139 26.1637 42.3426 35.9789C31.3329 55.0332 16.6468 80.45 14.1981 84.8666C12.6907 88.4861 14.79 92.7788 18.5642 93.8317C19.675 94.1263 20.8278 94.1059 21.9126 94.0868H21.913C22.3602 94.0789 22.7958 94.0712 23.2122 94.0858C33.1101 94.0952 46.0706 94.0899 59.1794 94.0845H59.1987C73.5688 94.0786 88.1152 94.0727 98.9988 94.0858C99.6018 94.097 100.654 94.0858 101.542 93.8345C104.281 93.072 106.316 90.4663 106.397 87.6259C106.427 86.6847 106.251 85.7435 105.911 84.8722C105.6 84.198 105.343 83.7601 105.091 83.3298C104.994 83.1647 104.898 83.0008 104.8 82.825L102.695 79.1775C97.9796 71.0065 91.8839 60.4436 85.7927 49.8887C79.7418 39.4036 73.6954 28.9264 69.0114 20.8094L66.9065 17.1619L65.854 15.3382C65.3767 14.5478 64.7514 13.8272 63.9948 13.2659ZM89.911 70.321C88.9393 69.4741 87.9408 68.664 86.914 67.8994L52.7152 84.4279C52.6312 84.4872 52.547 84.5461 52.4625 84.6046L93.7971 74.3586L89.911 70.321ZM60.2878 77.5471L82.9756 65.2888C81.6605 64.5235 80.3023 63.8381 78.8986 63.2473L60.2878 77.5471ZM63.7252 71.3493L74.7033 61.8136C74.1129 61.6576 73.5149 61.5186 72.9094 61.3974C71.8451 61.2029 70.7747 61.0668 69.698 60.9979L63.7252 71.3493ZM58.2536 74.5869L52.2856 64.2437L55.0519 78.5084C55.4794 78.0771 55.8961 77.6311 56.3014 77.1697C57.0024 76.3455 57.6555 75.4858 58.2536 74.5869ZM52.2107 57.8829C51.7315 56.9148 51.3135 55.9185 50.9499 54.8971C50.7538 54.3167 50.5766 53.7341 50.4175 53.1495L64.149 57.8829H52.2107ZM49.5654 39.6179L80.4651 60.6406C80.5406 60.6741 80.616 60.7078 80.6913 60.7418L51.5023 30.4146L50.8628 32.6348C50.2824 34.9443 49.8332 37.2782 49.5654 39.6179ZM51.7001 81.4387L48.477 56.9719C48.4111 56.8032 48.3468 56.6341 48.2841 56.4646L47.4974 84.174C48.9596 83.3588 50.3656 82.4512 51.7001 81.4387ZM43.2739 86.2227L45.9716 49.6168L34.6203 89.0272L34.6606 89.0174L35.0028 88.9325C37.8332 88.2235 40.6154 87.3412 43.2739 86.2227ZM70.8163 57.5825L49.2866 44.3175C49.285 45.8074 49.3707 47.2945 49.5565 48.7742L70.8163 57.5825ZM54.7052 62.3068L59.2723 70.219H59.2751C59.624 70.8223 60.4922 70.8223 60.8412 70.219L65.4083 62.3068C65.7544 61.7036 65.3189 60.9495 64.6238 60.9495H55.4897C54.7918 60.9495 54.3563 61.7036 54.7052 62.3068Z"
+-            fill="black"
+-          />
+-        </g>
+-      </g>
+-      <defs>
+-        <filter
+-          id="filter0_di_6096_19874"
+-          x="10.7686"
+-          y="10.0425"
+-          width="98.5692"
+-          height="87.9712"
+-          filterUnits="userSpaceOnUse"
+-          colorInterpolationFilters="sRGB"
+-        >
+-          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+-          <feColorMatrix
+-            in="SourceAlpha"
+-            type="matrix"
+-            values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+-            result="hardAlpha"
+-          />
+-          <feOffset dy="0.979244" />
+-          <feGaussianBlur stdDeviation="1.46887" />
+-          <feComposite in2="hardAlpha" operator="out" />
+-          <feColorMatrix
+-            type="matrix"
+-            values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.2 0"
+-          />
+-          <feBlend
+-            mode="normal"
+-            in2="BackgroundImageFix"
+-            result="effect1_dropShadow_6096_19874"
+-          />
+-          <feBlend
+-            mode="normal"
+-            in="SourceGraphic"
+-            in2="effect1_dropShadow_6096_19874"
+-            result="shape"
+-          />
+-          <feColorMatrix
+-            in="SourceAlpha"
+-            type="matrix"
+-            values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+-            result="hardAlpha"
+-          />
+-          <feOffset dy="-0.293773" />
+-          <feGaussianBlur stdDeviation="0.587547" />
+-          <feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1" />
+-          <feColorMatrix
+-            type="matrix"
+-            values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.6 0"
+-          />
+-          <feBlend
+-            mode="normal"
+-            in2="shape"
+-            result="effect2_innerShadow_6096_19874"
+-          />
+-        </filter>
+-        <radialGradient
+-          id="paint0_radial_6096_19874"
+-          cx="0"
+-          cy="0"
+-          r="1"
+-          gradientUnits="userSpaceOnUse"
+-          gradientTransform="translate(60.5275 60.4101) rotate(90) scale(45.8319 45.8321)"
+-        >
+-          <stop stopColor="#737373" />
+-          <stop offset="1" stopColor="#EFEFEF" />
+-        </radialGradient>
+-        <clipPath id="clip0_6096_19874">
+-          <rect width="120" height="120" fill="white" />
+-        </clipPath>
+-      </defs>
+-    </svg>
+-  );
++  return <AppIcon />;
+ });
+diff --git a/packages/frontend/core/src/components/hooks/affine/use-register-blocksuite-editor-commands.tsx b/packages/frontend/core/src/components/hooks/affine/use-register-blocksuite-editor-commands.tsx
+index f5af5954bb..d89c57a5a5 100644
+--- a/packages/frontend/core/src/components/hooks/affine/use-register-blocksuite-editor-commands.tsx
++++ b/packages/frontend/core/src/components/hooks/affine/use-register-blocksuite-editor-commands.tsx
+@@ -8,7 +8,6 @@ import { DocService } from '@affine/core/modules/doc';
+ import type { Editor } from '@affine/core/modules/editor';
+ import { EditorSettingService } from '@affine/core/modules/editor-setting';
+ import { CompatibleFavoriteItemsAdapter } from '@affine/core/modules/favorite';
+-import { OpenInAppService } from '@affine/core/modules/open-in-app';
+ import { GuardService } from '@affine/core/modules/permissions';
+ import { WorkspaceService } from '@affine/core/modules/workspace';
+ import { UserFriendlyError } from '@affine/error';
+@@ -17,13 +16,11 @@ import { track } from '@affine/track';
+ import {
+   EdgelessIcon,
+   HistoryIcon,
+-  LocalWorkspaceIcon,
+   PageIcon,
+ } from '@blocksuite/icons/rc';
+ import {
+   useLiveData,
+   useService,
+-  useServiceOptional,
+ } from '@toeverything/infra';
+ import { useSetAtom } from 'jotai';
+ import { useCallback, useEffect } from 'react';
+@@ -99,8 +96,6 @@ export function useRegisterBlocksuiteEditorCommands(
+ 
+   const isCloudWorkspace = workspace.flavour !== 'local';
+ 
+-  const openInAppService = useServiceOptional(OpenInAppService);
+-
+   useEffect(() => {
+     if (!active) {
+       return;
+@@ -357,20 +352,6 @@ export function useRegisterBlocksuiteEditorCommands(
+       );
+     }
+ 
+-    if (isCloudWorkspace && BUILD_CONFIG.isWeb) {
+-      unsubs.push(
+-        registerAffineCommand({
+-          id: 'editor:open-in-app',
+-          category: `editor:${mode}`,
+-          icon: <LocalWorkspaceIcon />,
+-          label: t['com.affine.header.option.open-in-desktop'](),
+-          run() {
+-            openInAppService?.showOpenInAppPage();
+-          },
+-        })
+-      );
+-    }
+-
+     unsubs.push(
+       registerAffineCommand({
+         id: 'alert-ctrl-s',
+@@ -408,7 +389,6 @@ export function useRegisterBlocksuiteEditorCommands(
+     pageWidth,
+     defaultPageWidth,
+     checked,
+-    openInAppService,
+     active,
+     guardService,
+   ]);
+diff --git a/packages/frontend/core/src/components/pure/help-island/index.tsx b/packages/frontend/core/src/components/pure/help-island/index.tsx
+index 6d1c681579..ae90ae8816 100644
+--- a/packages/frontend/core/src/components/pure/help-island/index.tsx
++++ b/packages/frontend/core/src/components/pure/help-island/index.tsx
+@@ -2,13 +2,12 @@ import { Tooltip } from '@affine/component/ui/tooltip';
+ import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
+ import type { SettingTab } from '@affine/core/modules/dialogs/constant';
+ import { GlobalContextService } from '@affine/core/modules/global-context';
+-import { UrlService } from '@affine/core/modules/url';
+ import { useI18n } from '@affine/i18n';
+-import { CloseIcon, NewIcon } from '@blocksuite/icons/rc';
+-import { useLiveData, useService, useServices } from '@toeverything/infra';
++import { CloseIcon } from '@blocksuite/icons/rc';
++import { useLiveData, useService } from '@toeverything/infra';
+ import { useCallback, useState } from 'react';
+ 
+-import { ContactIcon, HelpIcon, KeyboardIcon } from './icons';
++import { HelpIcon, KeyboardIcon } from './icons';
+ import {
+   StyledAnimateWrapper,
+   StyledIconWrapper,
+@@ -16,24 +15,8 @@ import {
+   StyledTriggerWrapper,
+ } from './style';
+ 
+-const DEFAULT_SHOW_LIST: IslandItemNames[] = [
+-  'whatNew',
+-  'contact',
+-  'shortcuts',
+-];
+-
+-const DESKTOP_SHOW_LIST: IslandItemNames[] = [...DEFAULT_SHOW_LIST];
+-type IslandItemNames = 'whatNew' | 'contact' | 'shortcuts';
+-
+-const showList = BUILD_CONFIG.isElectron
+-  ? DESKTOP_SHOW_LIST
+-  : DEFAULT_SHOW_LIST;
+-
+ export const HelpIsland = () => {
+-  const { globalContextService, urlService } = useServices({
+-    GlobalContextService,
+-    UrlService,
+-  });
++  const globalContextService = useService(GlobalContextService);
+   const docId = useLiveData(globalContextService.globalContext.docId.$);
+   const docMode = useLiveData(globalContextService.globalContext.docMode.$);
+   const workspaceDialogService = useService(WorkspaceDialogService);
+@@ -42,17 +25,12 @@ export const HelpIsland = () => {
+   const openSettingModal = useCallback(
+     (tab: SettingTab) => {
+       setShowSpread(false);
+-
+       workspaceDialogService.open('setting', {
+         activeTab: tab,
+       });
+     },
+     [workspaceDialogService]
+   );
+-  const openAbout = useCallback(
+-    () => openSettingModal('about'),
+-    [openSettingModal]
+-  );
+   const openShortcuts = useCallback(
+     () => openSettingModal('shortcuts'),
+     [openSettingModal]
+@@ -68,43 +46,19 @@ export const HelpIsland = () => {
+       inEdgelessPage={!!docId && docMode === 'edgeless'}
+     >
+       <StyledAnimateWrapper
+-        style={{ height: spread ? `${showList.length * 40 + 4}px` : 0 }}
++        style={{ height: spread ? `${1 * 40 + 4}px` : 0 }}
+       >
+-        {showList.includes('whatNew') && (
+-          <Tooltip content={t['com.affine.appUpdater.whatsNew']()} side="left">
+-            <StyledIconWrapper
+-              data-testid="right-bottom-change-log-icon"
+-              onClick={() => {
+-                urlService.openPopupWindow(BUILD_CONFIG.changelogUrl);
+-              }}
+-            >
+-              <NewIcon />
+-            </StyledIconWrapper>
+-          </Tooltip>
+-        )}
+-        {showList.includes('contact') && (
+-          <Tooltip content={t['com.affine.helpIsland.contactUs']()} side="left">
+-            <StyledIconWrapper
+-              data-testid="right-bottom-contact-us-icon"
+-              onClick={openAbout}
+-            >
+-              <ContactIcon />
+-            </StyledIconWrapper>
+-          </Tooltip>
+-        )}
+-        {showList.includes('shortcuts') && (
+-          <Tooltip
+-            content={t['com.affine.keyboardShortcuts.title']()}
+-            side="left"
++        <Tooltip
++          content={t['com.affine.keyboardShortcuts.title']()}
++          side="left"
++        >
++          <StyledIconWrapper
++            data-testid="shortcuts-icon"
++            onClick={openShortcuts}
+           >
+-            <StyledIconWrapper
+-              data-testid="shortcuts-icon"
+-              onClick={openShortcuts}
+-            >
+-              <KeyboardIcon />
+-            </StyledIconWrapper>
+-          </Tooltip>
+-        )}
++            <KeyboardIcon />
++          </StyledIconWrapper>
++        </Tooltip>
+       </StyledAnimateWrapper>
+ 
+       {spread ? (
+@@ -113,7 +67,7 @@ export const HelpIsland = () => {
+         </StyledTriggerWrapper>
+       ) : (
+         <Tooltip
+-          content={t['com.affine.helpIsland.helpAndFeedback']()}
++          content={t['com.affine.keyboardShortcuts.title']()}
+           side="left"
+         >
+           <StyledTriggerWrapper data-testid="faq-icon">
+diff --git a/packages/frontend/core/src/components/root-app-sidebar/index.tsx b/packages/frontend/core/src/components/root-app-sidebar/index.tsx
+index 2e0bddddce..8602b770ea 100644
+--- a/packages/frontend/core/src/components/root-app-sidebar/index.tsx
++++ b/packages/frontend/core/src/components/root-app-sidebar/index.tsx
+@@ -1,7 +1,5 @@
+-// Import is already correct, no changes needed
+ import {
+   AddPageButton,
+-  AppDownloadButton,
+   AppSidebar,
+   MenuItem,
+   MenuLinkItem,
+@@ -9,7 +7,6 @@ import {
+   SidebarContainer,
+   SidebarScrollableContainer,
+ } from '@affine/core/modules/app-sidebar/views';
+-import { ExternalMenuLinkItem } from '@affine/core/modules/app-sidebar/views/menu-item/external-menu-link-item';
+ import { AuthService, ServerService } from '@affine/core/modules/cloud';
+ import { WorkspaceDialogService } from '@affine/core/modules/dialogs';
+ import { FeatureFlagService } from '@affine/core/modules/feature-flag';
+@@ -19,12 +16,11 @@ import { useI18n } from '@affine/i18n';
+ import { track } from '@affine/track';
+ import type { Store } from '@blocksuite/affine/store';
+ import {
+-  AiOutlineIcon,
+-  AllDocsIcon,
+-  ImportIcon,
+-  JournalIcon,
+-  SettingsIcon,
+-} from '@blocksuite/icons/rc';
++  Files as AllDocsIcon,
++  GearSix as SettingsIcon,
++  ArrowSquareIn as ImportIcon,
++  Robot as AiOutlineIcon,
++} from '@phosphor-icons/react/dist/ssr';
+ import { useLiveData, useService, useServices } from '@toeverything/infra';
+ import type { ReactElement } from 'react';
+ import { memo, useCallback } from 'react';
+@@ -80,7 +76,7 @@ const AllDocsButton = () => {
+   );
+ 
+   return (
+-    <MenuLinkItem icon={<AllDocsIcon />} active={allPageActive} to={'/all'}>
++    <MenuLinkItem icon={<AllDocsIcon weight="duotone" />} active={allPageActive} to={'/all'}>
+       <span data-testid="all-pages">
+         {t['com.affine.workspaceSubPath.all']()}
+       </span>
+@@ -108,7 +104,7 @@ const AIChatButton = () => {
+   }
+ 
+   return (
+-    <MenuLinkItem icon={<AiOutlineIcon />} active={aiChatActive} to={'/chat'}>
++    <MenuLinkItem icon={<AiOutlineIcon weight="duotone" />} active={aiChatActive} to={'/chat'}>
+       <span data-testid="ai-chat">
+         {t['com.affine.workspaceSubPath.chat']()}
+       </span>
+@@ -217,7 +213,7 @@ export const RootAppSidebar = memo((): ReactElement => {
+         <AIChatButton />
+         <MenuItem
+           data-testid="slider-bar-workspace-setting-button"
+-          icon={<SettingsIcon />}
++          icon={<SettingsIcon weight="duotone" />}
+           onClick={onOpenSettingModal}
+         >
+           <span data-testid="settings-modal-trigger">
+@@ -239,23 +235,18 @@ export const RootAppSidebar = memo((): ReactElement => {
+           <TrashButton />
+           <MenuItem
+             data-testid="slider-bar-import-button"
+-            icon={<ImportIcon />}
++            icon={<ImportIcon weight="duotone" />}
+             onClick={onOpenImportModal}
+           >
+             <span data-testid="import-modal-trigger">{t['Import']()}</span>
+           </MenuItem>
+           <InviteMembersButton />
+           <TemplateDocEntrance />
+-          <ExternalMenuLinkItem
+-            href="https://affine.pro/blog?tag=Release+Note"
+-            icon={<JournalIcon />}
+-            label={t['com.affine.app-sidebar.learn-more']()}
+-          />
+         </CollapsibleSection>
+       </SidebarScrollableContainer>
+       <SidebarContainer className={bottomContainer}>
+         <SidebarAudioPlayer />
+-        {BUILD_CONFIG.isElectron ? <UpdaterButton /> : <AppDownloadButton />}
++        {BUILD_CONFIG.isElectron ? <UpdaterButton /> : null}
+       </SidebarContainer>
+     </AppSidebar>
+   );
+diff --git a/packages/frontend/core/src/components/root-app-sidebar/journal-button.tsx b/packages/frontend/core/src/components/root-app-sidebar/journal-button.tsx
+index 79300eec7f..2da41564ae 100644
+--- a/packages/frontend/core/src/components/root-app-sidebar/journal-button.tsx
++++ b/packages/frontend/core/src/components/root-app-sidebar/journal-button.tsx
+@@ -3,7 +3,7 @@ import { DocDisplayMetaService } from '@affine/core/modules/doc-display-meta';
+ import { JournalService } from '@affine/core/modules/journal';
+ import { WorkbenchService } from '@affine/core/modules/workbench';
+ import { useI18n } from '@affine/i18n';
+-import { TodayIcon } from '@blocksuite/icons/rc';
++import { CalendarDot as TodayIcon } from '@phosphor-icons/react/dist/ssr';
+ import { useLiveData, useService } from '@toeverything/infra';
+ 
+ export const AppSidebarJournalButton = () => {
+@@ -23,7 +23,7 @@ export const AppSidebarJournalButton = () => {
+       data-testid="slider-bar-journals-button"
+       active={isJournal || location.pathname.startsWith('/journals')}
+       to={'/journals'}
+-      icon={<Icon />}
++      icon={<Icon weight="duotone" />}
+     >
+       {t['com.affine.journal.app-sidebar-title']()}
+     </MenuLinkItem>
+diff --git a/packages/frontend/core/src/components/root-app-sidebar/notification-button.tsx b/packages/frontend/core/src/components/root-app-sidebar/notification-button.tsx
+index 0d0082c72d..061f74f08b 100644
+--- a/packages/frontend/core/src/components/root-app-sidebar/notification-button.tsx
++++ b/packages/frontend/core/src/components/root-app-sidebar/notification-button.tsx
+@@ -3,7 +3,7 @@ import { MenuItem } from '@affine/core/modules/app-sidebar/views';
+ import { NotificationCountService } from '@affine/core/modules/notification';
+ import { useI18n } from '@affine/i18n';
+ import { track } from '@affine/track';
+-import { NotificationIcon } from '@blocksuite/icons/rc';
++import { Bell as NotificationIcon } from '@phosphor-icons/react/dist/ssr';
+ import { useLiveData, useService } from '@toeverything/infra';
+ import { useCallback, useState } from 'react';
+ 
+@@ -54,7 +54,7 @@ export const NotificationButton = () => {
+       items={<NotificationList />}
+     >
+       <MenuItem
+-        icon={<NotificationIcon />}
++        icon={<NotificationIcon weight="duotone" />}
+         postfix={<Badge count={notificationCount} />}
+         active={notificationListOpen}
+         postfixDisplay="always"
+diff --git a/packages/frontend/core/src/components/root-app-sidebar/trash-button.tsx b/packages/frontend/core/src/components/root-app-sidebar/trash-button.tsx
+index b3f693647d..cb717186ae 100644
+--- a/packages/frontend/core/src/components/root-app-sidebar/trash-button.tsx
++++ b/packages/frontend/core/src/components/root-app-sidebar/trash-button.tsx
+@@ -4,6 +4,7 @@ import {
+   useConfirmModal,
+   useDropTarget,
+ } from '@affine/component';
++import { Trash as TrashIcon } from '@phosphor-icons/react/dist/ssr';
+ import { MenuLinkItem } from '@affine/core/modules/app-sidebar/views';
+ import { DocsService } from '@affine/core/modules/doc';
+ import { GlobalContextService } from '@affine/core/modules/global-context';
+@@ -76,7 +77,7 @@ export const TrashButton = () => {
+   return (
+     <MenuLinkItem
+       ref={dropTargetRef}
+-      icon={<AnimatedDeleteIcon closed={draggedOver} />}
++      icon={draggedOver ? <AnimatedDeleteIcon closed={draggedOver} /> : <TrashIcon weight="duotone" />}
+       active={trashActive || draggedOver}
+       to={'/trash'}
+     >
+diff --git a/packages/frontend/core/src/components/sign-in/sign-in.tsx b/packages/frontend/core/src/components/sign-in/sign-in.tsx
+index 04678561d3..b5dd182cd0 100644
+--- a/packages/frontend/core/src/components/sign-in/sign-in.tsx
++++ b/packages/frontend/core/src/components/sign-in/sign-in.tsx
+@@ -11,12 +11,8 @@ import { useAsyncCallback } from '@affine/core/components/hooks/affine-async-hoo
+ import { AuthService, ServerService } from '@affine/core/modules/cloud';
+ import type { AuthSessionStatus } from '@affine/core/modules/cloud/entities/session';
+ import { ServerDeploymentType } from '@affine/graphql';
+-import { Trans, useI18n } from '@affine/i18n';
+-import {
+-  ArrowRightBigIcon,
+-  LocalWorkspaceIcon,
+-  PublishIcon,
+-} from '@blocksuite/icons/rc';
++import { useI18n } from '@affine/i18n';
++import { ArrowRightBigIcon } from '@blocksuite/icons/rc';
+ import { useLiveData, useService } from '@toeverything/infra';
+ import { cssVar } from '@toeverything/theme';
+ import {
+@@ -194,48 +190,6 @@ export const SignInStep = ({
+           </Button>
+         </form>
+ 
+-        {!isSelfhosted && (
+-          <>
+-            <div className={style.authMessage}>
+-              {/*prettier-ignore*/}
+-              <Trans i18nKey="com.affine.auth.sign.message">
+-                By clicking &quot;Continue with Google/Email&quot; above, you acknowledge that
+-                you agree to AFFiNE&apos;s <a href="https://affine.pro/terms" target="_blank" rel="noreferrer">Terms of Conditions</a> and <a href="https://affine.pro/privacy" target="_blank" rel="noreferrer">Privacy Policy</a>.
+-            </Trans>
+-            </div>
+-            <div className={style.skipDivider}>
+-              <div className={style.skipDividerLine} />
+-              <span className={style.skipDividerText}>or</span>
+-              <div className={style.skipDividerLine} />
+-            </div>
+-            <div className={style.skipSection}>
+-              {BUILD_CONFIG.isNative ? (
+-                <Button
+-                  variant="plain"
+-                  className={style.addSelfhostedButton}
+-                  prefix={
+-                    <PublishIcon className={style.addSelfhostedButtonPrefix} />
+-                  }
+-                  onClick={onAddSelfhosted}
+-                >
+-                  {t['com.affine.auth.sign.add-selfhosted']()}
+-                </Button>
+-              ) : (
+-                <div className={style.skipText}>
+-                  {t['com.affine.mobile.sign-in.skip.hint']()}
+-                </div>
+-              )}
+-              <Button
+-                variant="plain"
+-                onClick={onSkip}
+-                className={style.skipLink}
+-                prefix={<LocalWorkspaceIcon className={style.skipLinkIcon} />}
+-              >
+-                {t['com.affine.mobile.sign-in.skip.link']()}
+-              </Button>
+-            </div>
+-          </>
+-        )}
+       </AuthContent>
+       {isSelfhosted && (
+         <AuthFooter>
+diff --git a/packages/frontend/core/src/components/workspace-selector/user-with-workspace-list/index.tsx b/packages/frontend/core/src/components/workspace-selector/user-with-workspace-list/index.tsx
+index 4e85964bb5..916f870767 100644
+--- a/packages/frontend/core/src/components/workspace-selector/user-with-workspace-list/index.tsx
++++ b/packages/frontend/core/src/components/workspace-selector/user-with-workspace-list/index.tsx
+@@ -6,7 +6,7 @@ import { type WorkspaceMetadata } from '@affine/core/modules/workspace';
+ import { ServerFeature } from '@affine/graphql';
+ import { useI18n } from '@affine/i18n';
+ import { track } from '@affine/track';
+-import { Logo1Icon } from '@blocksuite/icons/rc';
++import { AppIcon } from '@connaxis/brand';
+ import { useLiveData, useService } from '@toeverything/infra';
+ import { useCallback } from 'react';
+ 
+@@ -32,7 +32,7 @@ export const SignInItem = () => {
+     >
+       <div className={styles.signInWrapper}>
+         <div className={styles.iconContainer}>
+-          <Logo1Icon />
++          <AppIcon />
+         </div>
+ 
+         <div className={styles.signInTextContainer}>
+diff --git a/packages/frontend/core/src/components/workspace-selector/workspace-card/index.tsx b/packages/frontend/core/src/components/workspace-selector/workspace-card/index.tsx
+index 5a43a1c571..fd50b488a9 100644
+--- a/packages/frontend/core/src/components/workspace-selector/workspace-card/index.tsx
++++ b/packages/frontend/core/src/components/workspace-selector/workspace-card/index.tsx
+@@ -28,10 +28,12 @@ import clsx from 'clsx';
+ import type { HTMLAttributes } from 'react';
+ import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
+ 
++import { NavbarIcon } from '@connaxis/brand';
++
+ import { useAsyncCallback } from '../../hooks/affine-async-hooks';
++import { WorkspaceAvatar } from '../../workspace-avatar';
+ import { useCatchEventCallback } from '../../hooks/use-catch-event-hook';
+ import { useNavigateHelper } from '../../hooks/use-navigate-helper';
+-import { WorkspaceAvatar } from '../../workspace-avatar';
+ import * as styles from './styles.css';
+ export { PureWorkspaceCard } from './pure-workspace-card';
+ 
+@@ -120,10 +122,10 @@ const useSyncEngineSyncProgress = (meta: WorkspaceMetadata) => {
+     content = 'Sync disconnected due to unexpected issues, reconnecting.';
+   } else if (syncing) {
+     content =
+-      `Syncing with AFFiNE Cloud` +
++      `Syncing with Connaxis Cloud` +
+       (progress ? ` (${Math.floor(progress * 100)}%)` : '');
+   } else {
+-    content = 'Synced with AFFiNE Cloud';
++    content = 'Synced with Connaxis Cloud';
+   }
+ 
+   const CloudWorkspaceSyncStatus = () => {
+@@ -327,15 +329,15 @@ export const WorkspaceCard = forwardRef<
+       >
+         <div className={clsx(styles.infoContainer, infoClassName)}>
+           {information ? (
+-            <WorkspaceAvatar
+-              className={styles.avatar}
+-              meta={workspaceMetadata}
+-              rounded={3}
+-              data-testid="workspace-avatar"
+-              size={avatarSize}
+-              name={name}
+-              colorfulFallback
+-            />
++            information.avatar ? (
++              <WorkspaceAvatar
++                meta={workspaceMetadata}
++                size={avatarSize}
++                rounded={8}
++              />
++            ) : (
++              <NavbarIcon size={avatarSize} />
++            )
+           ) : (
+             <Skeleton width={avatarSize} height={avatarSize} />
+           )}
+diff --git a/packages/frontend/core/src/components/workspace-selector/workspace-card/pure-workspace-card.tsx b/packages/frontend/core/src/components/workspace-selector/workspace-card/pure-workspace-card.tsx
+index 10a682485d..3e03b5d333 100644
+--- a/packages/frontend/core/src/components/workspace-selector/workspace-card/pure-workspace-card.tsx
++++ b/packages/frontend/core/src/components/workspace-selector/workspace-card/pure-workspace-card.tsx
+@@ -7,6 +7,7 @@ import clsx from 'clsx';
+ import type { HTMLAttributes } from 'react';
+ import { forwardRef } from 'react';
+ 
++import { NavbarIcon } from '@connaxis/brand';
+ import { WorkspaceAvatar } from '../../workspace-avatar';
+ import * as styles from './styles.css';
+ 
+@@ -49,14 +50,15 @@ export const PureWorkspaceCard = forwardRef<
+       >
+         <div className={styles.infoContainer}>
+           {information ? (
+-            <WorkspaceAvatar
+-              meta={workspaceMetadata}
+-              rounded={3}
+-              data-testid="workspace-avatar"
+-              size={avatarSize}
+-              name={name}
+-              colorfulFallback
+-            />
++            information.avatar ? (
++              <WorkspaceAvatar
++                meta={workspaceMetadata}
++                size={avatarSize}
++                rounded={8}
++              />
++            ) : (
++              <NavbarIcon size={avatarSize} />
++            )
+           ) : (
+             <Skeleton width={avatarSize} height={avatarSize} />
+           )}
+diff --git a/packages/frontend/core/src/desktop/components/document-title/index.tsx b/packages/frontend/core/src/desktop/components/document-title/index.tsx
+index 7b229862f1..0cfa2dfa57 100644
+--- a/packages/frontend/core/src/desktop/components/document-title/index.tsx
++++ b/packages/frontend/core/src/desktop/components/document-title/index.tsx
+@@ -1,3 +1,4 @@
++import { APP_NAME } from '@connaxis/brand';
+ import { NotificationCountService } from '@affine/core/modules/notification';
+ import { WorkbenchService } from '@affine/core/modules/workbench';
+ import { useLiveData, useService } from '@toeverything/infra';
+@@ -12,10 +13,11 @@ export const DocumentTitle = () => {
+ 
+   useEffect(() => {
+     const prefix = notificationCount > 0 ? `(${notificationCount}) ` : '';
+-    document.title = prefix + (viewTitle ? `${viewTitle} · AFFiNE` : 'AFFiNE');
++    document.title =
++      prefix + (viewTitle ? `${viewTitle} · ${APP_NAME}` : APP_NAME);
+ 
+     return () => {
+-      document.title = 'AFFiNE';
++      document.title = APP_NAME;
+     };
+   }, [notificationCount, viewTitle]);
+ 
+diff --git a/packages/frontend/core/src/desktop/dialogs/import/index.tsx b/packages/frontend/core/src/desktop/dialogs/import/index.tsx
+index 72551c5667..a6c4209e03 100644
+--- a/packages/frontend/core/src/desktop/dialogs/import/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/import/index.tsx
+@@ -16,7 +16,6 @@ import {
+ import { ExplorerIconService } from '@affine/core/modules/explorer-icon/services/explorer-icon';
+ import { OrganizeService } from '@affine/core/modules/organize';
+ import { TagService } from '@affine/core/modules/tag';
+-import { UrlService } from '@affine/core/modules/url';
+ import {
+   getAFFiNEWorkspaceSchema,
+   type WorkspaceMetadata,
+@@ -780,16 +779,7 @@ const ImportOptions = ({
+         )}
+       </div>
+       <div className={style.importModalTip}>
+-        {t['com.affine.import.modal.tip']()}{' '}
+-        <a
+-          className={style.link}
+-          href={BUILD_CONFIG.discordUrl}
+-          target="_blank"
+-          rel="noreferrer"
+-        >
+-          Discord
+-        </a>
+-        .
++        {t['com.affine.import.modal.tip']()}
+       </div>
+     </>
+   );
+@@ -817,16 +807,7 @@ const SuccessStatus = ({ onComplete }: { onComplete: () => void }) => {
+         {t['com.affine.import.status.success.title']()}
+       </div>
+       <p className={style.importStatusContent}>
+-        {t['com.affine.import.status.success.message']()}{' '}
+-        <a
+-          className={style.link}
+-          href={BUILD_CONFIG.discordUrl}
+-          target="_blank"
+-          rel="noreferrer"
+-        >
+-          Discord
+-        </a>
+-        .
++        {t['com.affine.import.status.success.message']()}
+       </p>
+       <div className={style.importModalButtonContainer}>
+         <Button onClick={onComplete} variant="primary">
+@@ -845,7 +826,6 @@ const ErrorStatus = ({
+   onRetry: () => void;
+ }) => {
+   const t = useI18n();
+-  const urlService = useService(UrlService);
+   return (
+     <>
+       <div className={style.importModalTitle}>
+@@ -855,14 +835,6 @@ const ErrorStatus = ({
+         {error || 'Unknown error occurred'}
+       </p>
+       <div className={style.importModalButtonContainer}>
+-        <Button
+-          onClick={() => {
+-            urlService.openPopupWindow(BUILD_CONFIG.discordUrl);
+-          }}
+-          variant="secondary"
+-        >
+-          {t['Feedback']()}
+-        </Button>
+         <Button onClick={onRetry} variant="primary">
+           {t['Retry']()}
+         </Button>
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/general-setting/index.tsx b/packages/frontend/core/src/desktop/dialogs/setting/general-setting/index.tsx
+index 33436fa49f..a237c88a92 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/general-setting/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/general-setting/index.tsx
+@@ -7,7 +7,6 @@ import {
+   AppearanceIcon,
+   ExperimentIcon,
+   FolderIcon,
+-  InformationIcon,
+   KeyboardIcon,
+   MeetingIcon,
+   NotificationIcon,
+@@ -18,7 +17,6 @@ import { useEffect, useMemo } from 'react';
+ 
+ import { AuthService, ServerService } from '../../../../modules/cloud';
+ import type { SettingSidebarItem, SettingState } from '../types';
+-import { AboutAffine } from './about';
+ import { AppearanceSettings } from './appearance';
+ import { BackupSettingPanel } from './backup';
+ import { BillingSettings } from './billing';
+@@ -140,12 +138,6 @@ export const useGeneralSettingList = (): GeneralSettingList => {
+         title: t['com.affine.settings.workspace.experimental-features'](),
+         icon: <ExperimentIcon />,
+         testId: 'experimental-features-trigger',
+-      },
+-      {
+-        key: 'about',
+-        title: t['com.affine.aboutAFFiNE.title'](),
+-        icon: <InformationIcon />,
+-        testId: 'about-panel-trigger',
+       }
+     );
+     return settings;
+@@ -178,8 +170,6 @@ export const GeneralSetting = ({
+       return <AppearanceSettings />;
+     case 'meetings':
+       return <MeetingsSettings />;
+-    case 'about':
+-      return <AboutAffine />;
+     case 'plans':
+       return <AFFiNEPricingPlans />;
+     case 'billing':
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/index.tsx b/packages/frontend/core/src/desktop/dialogs/setting/index.tsx
+index 825cbf6ce0..4e7dd13852 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/index.tsx
+@@ -15,8 +15,7 @@ import type {
+ import { GlobalContextService } from '@affine/core/modules/global-context';
+ import { createIsland, type Island } from '@affine/core/utils/island';
+ import { ServerDeploymentType } from '@affine/graphql';
+-import { Trans, useTranslation } from '@affine/i18n';
+-import { ContactWithUsIcon } from '@blocksuite/icons/rc';
++import { useTranslation } from '@affine/i18n';
+ import { FrameworkScope, useLiveData, useService } from '@toeverything/infra';
+ import { debounce } from 'lodash-es';
+ import {
+@@ -32,9 +31,7 @@ import { flushSync } from 'react-dom';
+ 
+ import { AccountSetting } from './account-setting';
+ import { GeneralSetting } from './general-setting';
+-import { IssueFeedbackModal } from './issue-feedback-modal';
+ import { SettingSidebar } from './setting-sidebar';
+-import { StarAFFiNEModal } from './star-affine-modal';
+ import * as style from './style.css';
+ import {
+   SubPageContext,
+@@ -142,17 +139,6 @@ const SettingModalInner = ({
+     },
+     [setSettingState]
+   );
+-  const [openIssueFeedbackModal, setOpenIssueFeedbackModal] = useState(false);
+-  const [openStarAFFiNEModal, setOpenStarAFFiNEModal] = useState(false);
+-
+-  const handleOpenIssueFeedbackModal = useCallback(() => {
+-    setOpenIssueFeedbackModal(true);
+-  }, [setOpenIssueFeedbackModal]);
+-
+-  const handleOpenStarAFFiNEModal = useCallback(() => {
+-    setOpenStarAFFiNEModal(true);
+-  }, [setOpenStarAFFiNEModal]);
+-
+   const addSubPageIsland = useCallback(() => {
+     const island = createIsland();
+     setSubPageIslands(prev => [...prev, island]);
+@@ -233,34 +219,6 @@ const SettingModalInner = ({
+                   ) : null}
+                 </Suspense>
+               </div>
+-              <div className={style.footer}>
+-                <ContactWithUsIcon fontSize={16} />
+-                <Trans
+-                  i18nKey={'com.affine.settings.suggestion-2'}
+-                  components={{
+-                    1: (
+-                      <span
+-                        className={style.link}
+-                        onClick={handleOpenStarAFFiNEModal}
+-                      />
+-                    ),
+-                    2: (
+-                      <span
+-                        className={style.link}
+-                        onClick={handleOpenIssueFeedbackModal}
+-                      />
+-                    ),
+-                  }}
+-                />
+-              </div>
+-              <StarAFFiNEModal
+-                open={openStarAFFiNEModal}
+-                setOpen={setOpenStarAFFiNEModal}
+-              />
+-              <IssueFeedbackModal
+-                open={openIssueFeedbackModal}
+-                setOpen={setOpenIssueFeedbackModal}
+-              />
+             </div>
+             <Scrollable.Scrollbar />
+           </Scrollable.Viewport>
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/setting-sidebar/index.tsx b/packages/frontend/core/src/desktop/dialogs/setting/setting-sidebar/index.tsx
+index fc2672ac63..28ea1bba6b 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/setting-sidebar/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/setting-sidebar/index.tsx
+@@ -8,7 +8,7 @@ import type { SettingTab } from '@affine/core/modules/dialogs/constant';
+ import { type WorkspaceMetadata } from '@affine/core/modules/workspace';
+ import { useI18n } from '@affine/i18n';
+ import { track } from '@affine/track';
+-import { Logo1Icon } from '@blocksuite/icons/rc';
++import { AppIcon } from '@connaxis/brand';
+ import { useLiveData, useService } from '@toeverything/infra';
+ import clsx from 'clsx';
+ import {
+@@ -91,7 +91,7 @@ export const SignInButton = () => {
+       }, [globalDialogService])}
+     >
+       <div className="avatar not-sign">
+-        <Logo1Icon />
++        <AppIcon />
+       </div>
+ 
+       <div className="content">
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/index.tsx b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/index.tsx
+index 51c0f50d5d..beba1b126e 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/index.tsx
+@@ -127,12 +127,6 @@ export const useWorkspaceSettingList = (): SettingSidebarItem[] => {
+         icon: <PaymentIcon />,
+         testId: 'workspace-setting:billing',
+       },
+-      showLicense && {
+-        key: 'workspace:license' as SettingTab,
+-        title: t['com.affine.settings.workspace.license'](),
+-        icon: <PaymentIcon />,
+-        testId: 'workspace-setting:license',
+-      },
+     ].filter((item): item is SettingSidebarItem => !!item);
+   }, [showBilling, showLicense, t]);
+ 
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/license/index.tsx b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/license/index.tsx
+index 73e4cc4590..ce9172187d 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/license/index.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/license/index.tsx
+@@ -3,22 +3,15 @@ import {
+   SettingHeader,
+   SettingRow,
+ } from '@affine/component/setting-components';
+-import { getUpgradeQuestionnaireLink } from '@affine/core/components/hooks/affine/use-subscription-notify';
+ import { useAsyncCallback } from '@affine/core/components/hooks/affine-async-hooks';
+ import { useMutation } from '@affine/core/components/hooks/use-mutation';
+-import {
+-  AuthService,
+-  SelfhostLicenseService,
+-  WorkspaceSubscriptionService,
+-} from '@affine/core/modules/cloud';
++import { SelfhostLicenseService } from '@affine/core/modules/cloud';
+ import { WorkspacePermissionService } from '@affine/core/modules/permissions';
+ import { UrlService } from '@affine/core/modules/url';
+ import { WorkspaceService } from '@affine/core/modules/workspace';
+ import { UserFriendlyError } from '@affine/error';
+ import {
+   createSelfhostCustomerPortalMutation,
+-  SubscriptionPlan,
+-  SubscriptionRecurring,
+   SubscriptionVariant,
+ } from '@affine/graphql';
+ import { useI18n } from '@affine/i18n';
+@@ -27,7 +20,6 @@ import { useCallback, useEffect, useState } from 'react';
+ 
+ import { EnableCloudPanel } from '../preference/enable-cloud';
+ import { SelfHostTeamCard } from './self-host-team-card';
+-import { SelfHostTeamPlan } from './self-host-team-plan';
+ import * as styles from './styles.css';
+ import { UploadLicenseModal } from './upload-license-modal';
+ 
+@@ -50,14 +42,12 @@ export const WorkspaceSettingLicense = ({
+         title={t['com.affine.settings.workspace.license']()}
+         subtitle={t['com.affine.settings.workspace.license.description']()}
+       />
+-      <SelfHostTeamPlan />
+       {workspace.flavour === 'local' ? (
+         <EnableCloudPanel onCloseSetting={onCloseSetting} />
+       ) : (
+         <>
+           <SelfHostTeamCard />
+           <ReplaceLicenseModal />
+-          <TypeFormLink />
+           <PaymentMethodUpdater />
+         </>
+       )}
+@@ -111,39 +101,6 @@ const ReplaceLicenseModal = () => {
+   );
+ };
+ 
+-const TypeFormLink = () => {
+-  const t = useI18n();
+-  const workspaceSubscriptionService = useService(WorkspaceSubscriptionService);
+-  const authService = useService(AuthService);
+-
+-  const workspaceSubscription = useLiveData(
+-    workspaceSubscriptionService.subscription.subscription$
+-  );
+-  const account = useLiveData(authService.session.account$);
+-
+-  if (!account) return null;
+-
+-  const link = getUpgradeQuestionnaireLink({
+-    name: account.info?.name,
+-    id: account.id,
+-    email: account.email,
+-    recurring: workspaceSubscription?.recurring ?? SubscriptionRecurring.Yearly,
+-    plan: SubscriptionPlan.SelfHostedTeam,
+-  });
+-
+-  return (
+-    <SettingRow
+-      className={styles.paymentMethod}
+-      name={t['com.affine.payment.billing-type-form.title']()}
+-      desc={t['com.affine.payment.billing-type-form.description']()}
+-    >
+-      <a target="_blank" href={link} rel="noreferrer">
+-        <Button>{t['com.affine.payment.billing-type-form.go']()}</Button>
+-      </a>
+-    </SettingRow>
+-  );
+-};
+-
+ const PaymentMethodUpdater = () => {
+   const workspace = useService(WorkspaceService).workspace;
+ 
+diff --git a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/members/cloud-members-panel.tsx b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/members/cloud-members-panel.tsx
+index d6a2cbe72c..7172743b97 100644
+--- a/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/members/cloud-members-panel.tsx
++++ b/packages/frontend/core/src/desktop/dialogs/setting/workspace-setting/members/cloud-members-panel.tsx
+@@ -183,9 +183,12 @@ export const CloudWorkspaceMembersPanel = ({
+ 
+   const onGenerateInviteLink = useCallback(
+     async (expireTime: WorkspaceInviteLinkExpireTime) => {
+-      const { link } = await membersService.generateInviteLink(expireTime);
+-      workspaceShareSettingService.sharePreview.revalidateInviteLink();
+-      return link;
++      const inviteLink = await membersService.generateInviteLink(expireTime);
++      workspaceShareSettingService.sharePreview.setInviteLink({
++        link: inviteLink.link,
++        expireTime: inviteLink.expireTime as string,
++      });
++      return inviteLink.link;
+     },
+     [membersService, workspaceShareSettingService.sharePreview]
+   );
+diff --git a/packages/frontend/core/src/desktop/pages/index/index.tsx b/packages/frontend/core/src/desktop/pages/index/index.tsx
+index ac87e1d07f..60ca7be308 100644
+--- a/packages/frontend/core/src/desktop/pages/index/index.tsx
++++ b/packages/frontend/core/src/desktop/pages/index/index.tsx
+@@ -75,7 +75,7 @@ export const Component = ({
+     if (createOnceRef.current) return;
+     createOnceRef.current = true;
+     // TODO: support selfhosted
+-    buildShowcaseWorkspace(workspacesService, 'affine-cloud', 'AFFiNE Cloud')
++    buildShowcaseWorkspace(workspacesService, 'affine-cloud', 'Connaxis Wiki')
+       .then(({ meta, defaultDocId }) => {
+         if (defaultDocId) {
+           jumpToPage(meta.id, defaultDocId);
+diff --git a/packages/frontend/core/src/desktop/pages/workspace/layouts/workspace-layout.tsx b/packages/frontend/core/src/desktop/pages/workspace/layouts/workspace-layout.tsx
+index 28c50bb8b9..7ecb51553f 100644
+--- a/packages/frontend/core/src/desktop/pages/workspace/layouts/workspace-layout.tsx
++++ b/packages/frontend/core/src/desktop/pages/workspace/layouts/workspace-layout.tsx
+@@ -1,5 +1,6 @@
+ import { uniReactRoot } from '@affine/component';
+ import { AiLoginRequiredModal } from '@affine/core/components/affine/auth/ai-login-required';
++import { useNavigateHelper } from '@affine/core/components/hooks/use-navigate-helper';
+ import { useResponsiveSidebar } from '@affine/core/components/hooks/use-responsive-siedebar';
+ import { SWRConfigProvider } from '@affine/core/components/providers/swr-config-provider';
+ import { WorkspaceSideEffects } from '@affine/core/components/providers/workspace-side-effects';
+@@ -7,18 +8,43 @@ import { AIIsland } from '@affine/core/desktop/components/ai-island';
+ import { AppContainer } from '@affine/core/desktop/components/app-container';
+ import { DocumentTitle } from '@affine/core/desktop/components/document-title';
+ import { WorkspaceDialogs } from '@affine/core/desktop/dialogs';
++import { AuthService } from '@affine/core/modules/cloud';
+ import { PeekViewManagerModal } from '@affine/core/modules/peek-view';
+ import { QuotaCheck } from '@affine/core/modules/quota';
+ import { WorkbenchService } from '@affine/core/modules/workbench';
+ import { WorkspaceService } from '@affine/core/modules/workspace';
+ import { LiveData, useLiveData, useService } from '@toeverything/infra';
+ import type { PropsWithChildren } from 'react';
++import { useLayoutEffect } from 'react';
++
++// On native/Electron, local workspaces are allowed without auth.
++// On web (selfhosted or cloud), always require authentication.
++const isLocalWorkspaceAllowed = BUILD_CONFIG.isElectron || BUILD_CONFIG.isNative;
++
++const WorkspaceAuthGuard = ({ children }: PropsWithChildren) => {
++  const authService = useService(AuthService);
++  const sessionStatus = useLiveData(authService.session.status$);
++  const { jumpToSignIn } = useNavigateHelper();
++
++  useLayoutEffect(() => {
++    if (!isLocalWorkspaceAllowed && sessionStatus === 'unauthenticated') {
++      jumpToSignIn();
++    }
++  }, [sessionStatus, jumpToSignIn]);
++
++  if (!isLocalWorkspaceAllowed && sessionStatus !== 'authenticated') {
++    return null;
++  }
++
++  return <>{children}</>;
++};
+ 
+ export const WorkspaceLayout = function WorkspaceLayout({
+   children,
+ }: PropsWithChildren) {
+   const currentWorkspace = useService(WorkspaceService).workspace;
+   return (
++    <WorkspaceAuthGuard>
+     <SWRConfigProvider>
+       <WorkspaceDialogs />
+ 
+@@ -37,6 +63,7 @@ export const WorkspaceLayout = function WorkspaceLayout({
+       <AIIsland />
+       <uniReactRoot.Root />
+     </SWRConfigProvider>
++    </WorkspaceAuthGuard>
+   );
+ };
+ 
+diff --git a/packages/frontend/core/src/modules/ai-button/services/models.ts b/packages/frontend/core/src/modules/ai-button/services/models.ts
+index b50b76c40c..4b3f48cba2 100644
+--- a/packages/frontend/core/src/modules/ai-button/services/models.ts
++++ b/packages/frontend/core/src/modules/ai-button/services/models.ts
+@@ -82,7 +82,7 @@ export class AIModelService extends Service {
+   };
+ 
+   private readonly initModels = async (prompt?: string) => {
+-    const promptName = prompt || 'Chat With AFFiNE AI';
++    const promptName = prompt || 'Chat With Connaxis AI';
+     const models = await this.getModelsByPrompt(promptName);
+     if (models) {
+       const { defaultModel, optionalModels, proModels } = models;
+diff --git a/packages/frontend/core/src/modules/open-in-app/views/open-in-app-guard.tsx b/packages/frontend/core/src/modules/open-in-app/views/open-in-app-guard.tsx
+index 8116a48f01..fb4920d0a3 100644
+--- a/packages/frontend/core/src/modules/open-in-app/views/open-in-app-guard.tsx
++++ b/packages/frontend/core/src/modules/open-in-app/views/open-in-app-guard.tsx
+@@ -37,6 +37,4 @@ const WebOpenInAppGuard = ({ children }: { children: React.ReactNode }) => {
+   );
+ };
+ 
+-export const OpenInAppGuard = environment.isMobile
+-  ? Fragment
+-  : WebOpenInAppGuard;
++export const OpenInAppGuard = Fragment;
+diff --git a/packages/frontend/core/src/modules/share-setting/entities/share-setting.ts b/packages/frontend/core/src/modules/share-setting/entities/share-setting.ts
+index 0445329334..095e56a7a7 100644
+--- a/packages/frontend/core/src/modules/share-setting/entities/share-setting.ts
++++ b/packages/frontend/core/src/modules/share-setting/entities/share-setting.ts
+@@ -80,6 +80,11 @@ export class WorkspaceShareSetting extends Entity {
+     this.inviteLinkLiveQuery.revalidate();
+   };
+ 
++  setInviteLink = (inviteLink: InviteLink) => {
++    this.inviteLink$.next(inviteLink);
++    this.scheduleInviteLinkExpiry(inviteLink);
++  };
++
+   async waitForRevalidation(signal?: AbortSignal) {
+     this.revalidate();
+     await this.isLoading$.waitFor(isLoading => !isLoading, signal);
+diff --git a/packages/frontend/core/src/utils/first-app-data.ts b/packages/frontend/core/src/utils/first-app-data.ts
+index f53405bc90..582b7ae573 100644
+--- a/packages/frontend/core/src/utils/first-app-data.ts
++++ b/packages/frontend/core/src/utils/first-app-data.ts
+@@ -7,7 +7,6 @@ import onboardingUrl from '@affine/templates/onboarding.zip';
+ import { ZipTransformer } from '@blocksuite/affine/widgets/linked-doc';
+ 
+ import { DocsService } from '../modules/doc';
+-import { OrganizeService } from '../modules/organize';
+ import {
+   getAFFiNEWorkspaceSchema,
+   type WorkspacesService,
+@@ -40,25 +39,6 @@ export async function buildShowcaseWorkspace(
+   const defaultDoc = docsService.list.docs$.value.find(p =>
+     p.title$.value.startsWith('Getting Started')
+   );
+-  const folderTutorialDoc = docsService.list.docs$.value.find(p =>
+-    p.title$.value.startsWith('How to use folder and Tags')
+-  );
+-
+-  // create default organize
+-  if (folderTutorialDoc) {
+-    const organizeService = workspace.scope.get(OrganizeService);
+-    const folderId = organizeService.folderTree.rootFolder.createFolder(
+-      'First Folder',
+-      organizeService.folderTree.rootFolder.indexAt('after')
+-    );
+-    const firstFolderNode =
+-      organizeService.folderTree.folderNode$(folderId).value;
+-    firstFolderNode?.createLink(
+-      'doc',
+-      folderTutorialDoc.id,
+-      firstFolderNode.indexAt('after')
+-    );
+-  }
+ 
+   dispose();
+ 
+diff --git a/tools/cli/src/rspack-shared/template.html b/tools/cli/src/rspack-shared/template.html
+index 0eb14ef635..68b259ad6c 100644
+--- a/tools/cli/src/rspack-shared/template.html
++++ b/tools/cli/src/rspack-shared/template.html
+@@ -14,32 +14,15 @@
+       content="black-translucent"
+     />
+ 
+-    <title>AFFiNE</title>
++    <title>Connaxis Wiki</title>
+     <meta name="theme-color" content="#fafafa" />
+     <%= PRECONNECT %>
+     <link rel="manifest" href="/manifest.json" />
+     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+-    <link rel="icon" sizes="192x192" href="/favicon-192.png" />
+-    <link rel="shortcut icon" href="/favicon.ico?v=2" />
++    <link rel="icon" sizes="192x192" href="/favicon-192.png?v=3" />
++    <link rel="shortcut icon" type="image/png" href="/favicon-192.png?v=3" />
+     <meta name="emotion-insertion-point" content="" />
+     <meta property="description" content="<%= DESCRIPTION %>" />
+-    <meta name="twitter:card" content="summary_large_image" />
+-    <meta name="twitter:url" content="https://app.affine.pro/" />
+-    <meta
+-      name="twitter:title"
+-      content="AFFiNE: There can be more than Notion and Miro."
+-    />
+-    <meta name="twitter:description" content="<%= DESCRIPTION %>" />
+-    <meta name="twitter:site" content="@AffineOfficial" />
+-    <meta name="twitter:image" content="https://affine.pro/og.jpeg" />
+-    <meta
+-      property="og:title"
+-      content="AFFiNE: There can be more than Notion and Miro."
+-    />
+-    <meta property="og:type" content="website" />
+-    <meta property="og:description" content="<%= DESCRIPTION %>" />
+-    <meta property="og:url" content="https://app.affine.pro/" />
+-    <meta property="og:image" content="https://affine.pro/og.jpeg" />
+   </head>
+ 
+   <body>
+diff --git a/tools/utils/src/workspace.gen.ts b/tools/utils/src/workspace.gen.ts
+index 52b7937595..4d8a9f351d 100644
+--- a/tools/utils/src/workspace.gen.ts
++++ b/tools/utils/src/workspace.gen.ts
+@@ -1115,6 +1115,11 @@ export const PackageList = [
+       'packages/common/realtime',
+     ],
+   },
++  {
++    location: 'packages/brand',
++    name: '@connaxis/brand',
++    workspaceDependencies: [],
++  },
+   {
+     location: 'packages/common/debug',
+     name: '@affine/debug',
+@@ -1181,6 +1186,7 @@ export const PackageList = [
+       'packages/common/error',
+       'packages/common/graphql',
+       'packages/frontend/routes',
++      'packages/brand',
+     ],
+   },
+   {
+@@ -1280,6 +1286,7 @@ export const PackageList = [
+       'packages/common/error',
+       'packages/common/graphql',
+       'packages/frontend/i18n',
++      'packages/brand',
+       'tools/utils',
+     ],
+   },
+@@ -1305,6 +1312,7 @@ export const PackageList = [
+       'blocksuite/affine/data-view',
+       'blocksuite/framework/global',
+       'blocksuite/framework/std',
++      'packages/brand',
+       'packages/common/infra',
+       'blocksuite/affine/ext-loader',
+     ],
+@@ -1526,6 +1534,7 @@ export type PackageName =
+   | '@affine/docs'
+   | '@affine/server-native'
+   | '@affine/server'
++  | '@connaxis/brand'
+   | '@affine/debug'
+   | '@affine/env'
+   | '@affine/error'
