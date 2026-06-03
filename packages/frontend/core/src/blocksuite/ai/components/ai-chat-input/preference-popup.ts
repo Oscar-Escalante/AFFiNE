@@ -178,7 +178,7 @@ export class ChatInputPreference extends SignalWatcher(
               select: () => {
                 if (model.isPro && !isSelfHosted && !isSubscribed) {
                   this.notificationService.toast(
-                    `Pro models require an AFFiNE AI subscription.`
+                    `Pro models are not available on this plan. Contact oscar.escalante@connaxis.com for access.`
                   );
                   return;
                 }

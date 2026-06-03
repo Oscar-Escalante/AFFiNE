@@ -102,7 +102,7 @@ const FeedbackIcon = ({ type }: { type: Flag['feedbackType'] }) => {
 const feedbackLink: Record<NonNullable<Flag['feedbackType']>, string> = {
   discord: BUILD_CONFIG.discordUrl,
   email: 'mailto:oscar.escalante@connaxis.com',
-  github: 'https://github.com/Oscar-Escalante/AFFiNE/issues',
+  github: 'mailto:oscar.escalante@connaxis.com',
 };
 
 const ExperimentalFeaturesItem = ({

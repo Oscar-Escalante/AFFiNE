@@ -9,27 +9,7 @@ import {
 export const relatedLinks = [
   {
     icon: <GithubIcon />,
-    title: 'GitHub',
-    link: 'https://github.com/Oscar-Escalante/AFFiNE',
-  },
-  {
-    icon: <TwitterIcon />,
-    title: 'X',
-    link: 'https://twitter.com/AffineOfficial',
-  },
-  {
-    icon: <DiscordIcon />,
-    title: 'Discord',
-    link: BUILD_CONFIG.discordUrl,
-  },
-  {
-    icon: <YouTubeIcon />,
-    title: 'YouTube',
-    link: 'https://www.youtube.com/@affinepro',
-  },
-  {
-    icon: <RedditIcon />,
-    title: 'Reddit',
-    link: 'https://www.reddit.com/r/Affine/',
+    title: 'Contact',
+    link: 'mailto:oscar.escalante@connaxis.com',
   },
 ];
