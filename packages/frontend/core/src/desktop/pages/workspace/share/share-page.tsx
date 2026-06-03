@@ -403,7 +403,7 @@ const SharePageFooter = () => {
   }
   return (
     <a
-      href="https://affine.pro"
+      href="https://connaxis.com"
       target="_blank"
       className={styles.link}
       rel="noreferrer"

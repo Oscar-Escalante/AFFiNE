@@ -67,7 +67,7 @@ export const BUILD_IN_SERVERS: (ServerMetadata & { config: ServerConfig })[] =
               baseUrl: BUILD_CONFIG.isNative
                 ? BUILD_CONFIG.isIOS
                   ? 'https://apple.getaffineapp.com'
-                  : 'https://app.affine.pro'
+                  : 'https://wiki.connaxis.com'
                 : location.origin,
               config: {
                 serverName: 'Affine Cloud',
@@ -100,7 +100,7 @@ export const BUILD_IN_SERVERS: (ServerMetadata & { config: ServerConfig })[] =
                 baseUrl: BUILD_CONFIG.isNative
                   ? BUILD_CONFIG.isIOS
                     ? 'https://apple.getaffineapp.com'
-                    : 'https://insider.affine.pro'
+                    : 'https://wiki.connaxis.com'
                   : location.origin,
                 config: {
                   serverName: 'Affine Cloud',
@@ -130,7 +130,7 @@ export const BUILD_IN_SERVERS: (ServerMetadata & { config: ServerConfig })[] =
             ? [
                 {
                   id: 'affine-cloud',
-                  baseUrl: 'https://insider.affine.pro',
+                  baseUrl: 'https://wiki.connaxis.com',
                   config: {
                     serverName: 'Affine Cloud',
                     features: [
@@ -196,9 +196,9 @@ export type TelemetryChannel =
   | 'local';
 
 const OFFICIAL_TELEMETRY_ENDPOINTS: Record<TelemetryChannel, string> = {
-  stable: 'https://app.affine.pro',
-  beta: 'https://insider.affine.pro',
-  internal: 'https://insider.affine.pro',
+  stable: 'https://wiki.connaxis.com',
+  beta: 'https://wiki.connaxis.com',
+  internal: 'https://wiki.connaxis.com',
   canary: 'https://affine.fail',
   local: 'http://localhost:8080',
 };

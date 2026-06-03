@@ -74,7 +74,7 @@ export const ScrollableLayout = ({
         <div className={styles.linkGroup}>
           <a
             className={styles.link}
-            href="https://affine.pro/terms"
+            href="https://connaxis.com"
             target="_blank"
             rel="noreferrer"
           >
@@ -83,7 +83,7 @@ export const ScrollableLayout = ({
           <Divider orientation="vertical" />
           <a
             className={styles.link}
-            href="https://affine.pro/privacy"
+            href="https://connaxis.com"
             target="_blank"
             rel="noreferrer"
           >

@@ -7,7 +7,7 @@ import queryString from 'query-string';
 function maybeAffineOrigin(origin: string, baseUrl: string) {
   return (
     origin.startsWith('assets://') ||
-    origin.endsWith('affine.pro') || // stable/beta
+    origin.endsWith('connaxis.com') || // stable/beta
     origin.endsWith('apple.getaffineapp.com') || // stable/beta
     origin.endsWith('affine.fail') || // canary
     origin === baseUrl // localhost or self-hosted

@@ -7,15 +7,15 @@ export const useNavConfig = () => {
     () => [
       {
         title: t['com.affine.other-page.nav.official-website'](),
-        path: 'https://affine.pro',
+        path: 'https://connaxis.com',
       },
       {
         title: t['com.affine.other-page.nav.blog'](),
-        path: 'https://affine.pro/blog',
+        path: 'https://connaxis.com',
       },
       {
         title: t['com.affine.other-page.nav.contact-us'](),
-        path: 'https://affine.pro/about-us',
+        path: 'https://connaxis.com',
       },
     ],
     [t]

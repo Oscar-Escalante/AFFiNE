@@ -152,7 +152,7 @@ export const AddSelfhostedStep = ({
             components={{
               1: (
                 <a
-                  href="https://docs.affine.pro/docs/self-host-affine"
+                  href="https://connaxis.com"
                   target="_blank"
                   rel="noreferrer"
                 />

@@ -40,7 +40,7 @@ export const EditorLoading = ({
                   1: (
                     <a
                       style={{ color: 'var(--affine-primary-color)' }}
-                      href="https://affine.pro/redirect/discord"
+                      href="mailto:oscar.escalante@connaxis.com"
                       target="__blank"
                     />
                   ),

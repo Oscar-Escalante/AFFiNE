@@ -19,7 +19,7 @@ interface OpenAppProps {
 }
 const channel = BUILD_CONFIG.appBuildType;
 const url =
-  'https://affine.pro/download' + (channel !== 'stable' ? '/beta-canary' : '');
+  'https://connaxis.com' + (channel !== 'stable' ? '/beta-canary' : '');
 
 export const OpenInAppPage = ({
   urlToOpen,
@@ -66,7 +66,7 @@ export const OpenInAppPage = ({
 
         <div className={styles.topNavLinks}>
           <a
-            href="https://affine.pro"
+            href="https://connaxis.com"
             target="_blank"
             rel="noreferrer"
             className={styles.topNavLink}
@@ -74,7 +74,7 @@ export const OpenInAppPage = ({
             Official Website
           </a>
           <a
-            href="https://affine.pro/blog"
+            href="https://connaxis.com"
             target="_blank"
             rel="noreferrer"
             className={styles.topNavLink}
@@ -82,7 +82,7 @@ export const OpenInAppPage = ({
             Blog
           </a>
           <a
-            href="https://affine.pro/about-us"
+            href="https://connaxis.com"
             target="_blank"
             rel="noreferrer"
             className={styles.topNavLink}
