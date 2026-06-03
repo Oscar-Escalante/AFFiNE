@@ -39,26 +39,26 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* ── Heading scale: vertical dark progression ───────────── */
-/* h1 near-black, progressively lighter down to h4+ */
+/* ── Heading scale: navy vertical progression ───────────── */
+/* h1 darkest navy-black → h4 full Connaxis Navy #1b3a6b   */
 .affine-page-root h1,
 affine-paragraph[data-block-is-heading='h1'] .inline-editor,
-h1 { color: #141413; font-weight: 700; }
+h1 { color: #0e1e38; font-weight: 700; }
 
 .affine-page-root h2,
 affine-paragraph[data-block-is-heading='h2'] .inline-editor,
-h2 { color: #1e1e1d; font-weight: 700; }
+h2 { color: #12274a; font-weight: 700; }
 
 .affine-page-root h3,
 affine-paragraph[data-block-is-heading='h3'] .inline-editor,
-h3 { color: #2a2a29; font-weight: 700; }
+h3 { color: #16305c; font-weight: 700; }
 
-h4, h5, h6 { color: #323231; font-weight: 700; }
+h4, h5, h6 { color: #1b3a6b; font-weight: 700; }
 
 /* AFFiNE editor heading blocks */
-[data-block-is-heading='h1'] { color: #141413 !important; }
-[data-block-is-heading='h2'] { color: #1e1e1d !important; }
-[data-block-is-heading='h3'] { color: #2a2a29 !important; }
+[data-block-is-heading='h1'] { color: #0e1e38 !important; }
+[data-block-is-heading='h2'] { color: #12274a !important; }
+[data-block-is-heading='h3'] { color: #16305c !important; }
 
 /* ── Sidebar active item: orange tint ───────────────────── */
 /* Active nav item background */
