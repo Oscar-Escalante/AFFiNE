@@ -258,14 +258,6 @@ export const AFFiNEWorkspaceList = ({
     [workspaces]
   );
 
-  const localWorkspaces = useMemo(
-    () =>
-      workspaces.filter(
-        ({ flavour }) => flavour === 'local'
-      ) as WorkspaceMetadata[],
-    [workspaces]
-  );
-
   const onClickEnableCloud = useCallback(
     (meta: WorkspaceMetadata) => {
       const { workspace, dispose } = workspacesService.open({ metadata: meta });
@@ -301,18 +293,6 @@ export const AFFiNEWorkspaceList = ({
           onClickWorkspace={handleClickWorkspace}
         />
       </FrameworkScope>
-      {(localWorkspaces.length > 0 || selfhostServers.length > 0) && (
-        <Divider size="thinner" className={styles.serverDivider} />
-      )}
-
-      {/* 2. local */}
-      <LocalWorkspaces
-        workspaces={localWorkspaces}
-        onClickWorkspace={handleClickWorkspace}
-        onClickEnableCloud={
-          showEnableCloudButton ? onClickEnableCloud : undefined
-        }
-      />
       {selfhostServers.length > 0 && (
         <Divider size="thinner" className={styles.serverDivider} />
       )}
