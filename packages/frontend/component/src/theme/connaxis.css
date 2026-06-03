@@ -60,17 +60,25 @@ h4, h5, h6 { color: #1b3a6b; font-weight: 700; }
 [data-block-is-heading='h2'] { color: #12274a !important; }
 [data-block-is-heading='h3'] { color: #16305c !important; }
 
-/* ── Navbar hover: orange underline, keep text color as-is ─ */
-[data-testid='explorer-item']:hover span,
-[data-testid='explorer-item']:hover a,
-[class*='menuItem']:hover > span,
-[class*='sidebarItem']:hover > span,
-nav a:hover,
-[role='navigation'] a:hover {
-  text-decoration: underline;
-  text-decoration-color: #f09500;
-  text-underline-offset: 3px;
-  text-decoration-thickness: 1.5px;
+/* ── Sidebar active: text naranja ───────────────────────── */
+[data-active='true'] {
+  color: #f09500 !important;
+}
+[data-active='true'] span,
+[data-active='true'] svg {
+  color: #f09500 !important;
+  fill: #f09500 !important;
+}
+
+/* ── Sidebar hover: fondo naranja muy suave ─────────────── */
+/* La variable --affine-hover-color ya aplica en los items  */
+/* que usan el sistema de AFFiNE, pero forzamos los casos   */
+/* donde AFFiNE usa su propio gris por defecto              */
+[data-testid='explorer-item']:hover,
+[class*='menuItem']:hover,
+[class*='sidebarItem']:hover,
+[class*='collapsibleItem']:hover {
+  background-color: rgba(240, 149, 0, 0.07) !important;
 }
 
 /* ── Input autofill: keep default white ─────────────────── */
