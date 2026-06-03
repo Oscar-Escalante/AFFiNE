@@ -60,21 +60,17 @@ h4, h5, h6 { color: #1b3a6b; font-weight: 700; }
 [data-block-is-heading='h2'] { color: #12274a !important; }
 [data-block-is-heading='h3'] { color: #16305c !important; }
 
-/* ── Sidebar active item: orange tint ───────────────────── */
-/* Active nav item background */
-[data-active='true'] {
-  background-color: rgba(240, 149, 0, 0.10) !important;
-}
-/* Active nav item text/icon color */
-[data-active='true'] svg,
-[data-active='true'] span {
-  color: #f09500 !important;
-}
-/* Hover on nav items: subtle orange */
-[data-testid='explorer-item']:hover,
-[class*='menuItem']:hover,
-[class*='sidebarItem']:hover {
-  background-color: rgba(240, 149, 0, 0.06) !important;
+/* ── Navbar hover: orange underline, keep text color as-is ─ */
+[data-testid='explorer-item']:hover span,
+[data-testid='explorer-item']:hover a,
+[class*='menuItem']:hover > span,
+[class*='sidebarItem']:hover > span,
+nav a:hover,
+[role='navigation'] a:hover {
+  text-decoration: underline;
+  text-decoration-color: #f09500;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
 }
 
 /* ── Input autofill: keep default white ─────────────────── */
