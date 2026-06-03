@@ -327,7 +327,7 @@
   "copilot": {
     "enabled": {
       "type": "Boolean",
-      "desc": "Whether to enable the copilot plugin. <br> Document: <a href=\"https://connaxis.com" target=\"_blank\">https://connaxis.com</a>"
+      "desc": "Whether to enable the copilot plugin."
     },
     "byok.enabled": {
       "type": "Boolean",
