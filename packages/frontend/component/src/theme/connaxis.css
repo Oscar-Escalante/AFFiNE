@@ -29,8 +29,11 @@
   --affine-v2-aI-applyTextHighlight: #f09500;
   --affine-v2-aI-applyTextHighlightBackground: rgba(240, 149, 0, 0.08);
 
-  /* ── Hover: orange-tinted instead of blue ───────────────── */
-  --affine-hover-color: rgba(240, 149, 0, 0.06);
+  /* ── Hover: orange-tinted instead of blue/gray ─────────── */
+  /* v1 hover variable */
+  --affine-hover-color: rgba(240, 149, 0, 0.07);
+  /* v2 hover overlay — controls sidebar item hover AND active bg */
+  --affine-v2-layer-background-hoverOverlay: rgba(240, 149, 0, 0.07);
 }
 
 /* ── Font weight fine-tuning ─────────────────────────────── */
@@ -60,25 +63,15 @@ h4, h5, h6 { color: #1b3a6b; font-weight: 700; }
 [data-block-is-heading='h2'] { color: #12274a !important; }
 [data-block-is-heading='h3'] { color: #16305c !important; }
 
-/* ── Sidebar active: text naranja ───────────────────────── */
-[data-active='true'] {
-  color: #f09500 !important;
-}
+/* ── Sidebar active: texto naranja oscuro (~17% más oscuro) */
+[data-active='true'],
 [data-active='true'] span,
-[data-active='true'] svg {
-  color: #f09500 !important;
-  fill: #f09500 !important;
+[data-active='true'] a {
+  color: #c87d00 !important;
 }
-
-/* ── Sidebar hover: fondo naranja muy suave ─────────────── */
-/* La variable --affine-hover-color ya aplica en los items  */
-/* que usan el sistema de AFFiNE, pero forzamos los casos   */
-/* donde AFFiNE usa su propio gris por defecto              */
-[data-testid='explorer-item']:hover,
-[class*='menuItem']:hover,
-[class*='sidebarItem']:hover,
-[class*='collapsibleItem']:hover {
-  background-color: rgba(240, 149, 0, 0.07) !important;
+[data-active='true'] svg {
+  color: #c87d00 !important;
+  fill: #c87d00 !important;
 }
 
 /* ── Input autofill: keep default white ─────────────────── */
