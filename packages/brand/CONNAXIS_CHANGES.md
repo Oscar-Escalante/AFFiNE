@@ -1,9 +1,9 @@
 # Connaxis Wiki — Change Migration Guide
 
 **Base upstream commit:** `7123595831 chore: bump deps (#15059)`  
-**Total Connaxis commits on top:** 45  
+**Total Connaxis commits on top:** 49  
 **Patch files:** `patches/` directory  
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-03
 
 This document describes every change made to the upstream AFFiNE codebase to produce Connaxis Wiki. Use this guide to reapply changes when upgrading to a newer upstream version.
 
@@ -389,6 +389,76 @@ Custom workspace avatar: when a workspace has no custom avatar, falls back to Co
 
 ---
 
+## Category 19 — Brand Theme CSS Override
+
+**Patch file:** `patches/connaxis-theme.patch`
+
+### New file: `packages/frontend/component/src/theme/connaxis.css`
+
+Single CSS file that overrides `@toeverything/theme` variables. Imported last in `index.ts` so it takes precedence over all AFFiNE defaults. Light mode only — dark mode inherits AFFiNE defaults untouched.
+
+**Import added to `packages/frontend/component/src/theme/index.ts`:**
+```ts
+import './connaxis.css'; // last — overrides everything above
+```
+
+**`tools/cli/src/rspack-shared/template.html`:**
+```diff
+- <meta name="theme-color" content="#fafafa" />
++ <meta name="theme-color" content="#f9fae4" />
+```
+
+### What the CSS overrides
+
+**Typography — Lato from Google Fonts:**
+```css
+@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
+--affine-font-family: 'Lato', 'Inter', system-ui, ...;
+```
+
+**Primary accent — Connaxis Orange `#F09500`:**
+Replaces the AFFiNE blue `#1E96EB` across all v1 and v2 CSS variables:
+- `--affine-brand-color`, `--affine-primary-color`
+- `--affine-v2-button-primary`
+- `--affine-v2-database-focusBackground`
+- `--affine-v2-aI-applyTextHighlight`
+- `--affine-hover-color` (orange-tinted hover)
+- Focus ring (`outline-color`), text selection (`::selection`)
+
+**Heading scale — Navy vertical progression:**
+
+| Level | Color | Hex |
+|---|---|---|
+| H1 | Navy-black (darkest) | `#0e1e38` |
+| H2 | Very dark navy | `#12274a` |
+| H3 | Dark navy | `#16305c` |
+| H4–H6 | Connaxis Navy | `#1b3a6b` |
+
+Applied via both standard HTML selectors and AFFiNE's editor block selectors:
+```css
+[data-block-is-heading='h1'] { color: #0e1e38 !important; }
+[data-block-is-heading='h2'] { color: #12274a !important; }
+[data-block-is-heading='h3'] { color: #16305c !important; }
+```
+
+**Sidebar active item — orange tint:**
+```css
+[data-active='true'] {
+  background-color: rgba(240, 149, 0, 0.10) !important;
+}
+[data-active='true'] svg,
+[data-active='true'] span {
+  color: #f09500 !important;
+}
+```
+
+### What was tried and reverted
+- **Navy sidebar background** (`#1B3A6B`) — workspace avatar logos have white borders that show as lines on dark background; reverted
+- **Warm cream backgrounds** (`#F9FAE4`) — too visually heavy/yellow; reverted
+- Both reverted within the same CI cycle; only orange accent + typography survived
+
+---
+
 ## Pending / Future Work
 
 ### Intelligence Tab (docSemanticSearch)
@@ -413,6 +483,7 @@ To make the Docker image private:
 ### New Files
 - `.github/workflows/connaxis-build.yml`
 - `packages/brand/` (entire package)
+- `packages/frontend/component/src/theme/connaxis.css` (brand theme override)
 
 ### Binary Files Changed
 - `packages/brand/assets/` — logo files

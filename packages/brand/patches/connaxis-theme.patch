@@ -1,0 +1,150 @@
+diff --git a/packages/frontend/component/src/theme/connaxis.css b/packages/frontend/component/src/theme/connaxis.css
+new file mode 100644
+index 0000000000..b4eb39edb5
+--- /dev/null
++++ b/packages/frontend/component/src/theme/connaxis.css
+@@ -0,0 +1,94 @@
++/* ============================================================
++   Connaxis Wiki — Brand Theme Override
++   Overrides @toeverything/theme variables after they load.
++   Light mode only — dark mode inherits AFFiNE defaults.
++   ============================================================ */
++
++/* ── Lato from Google Fonts (300 + 400 weights) ─────────── */
++@import url('https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap');
++
++/* ── Light mode overrides ─────────────────────────────────── */
++:root,
++[data-theme='light'] {
++
++  /* ── Typography ─────────────────────────────────────────── */
++  --affine-font-family: 'Lato', 'Inter', system-ui, -apple-system,
++    BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
++  --affine-font-sans-family: 'Lato', 'Inter', system-ui, -apple-system,
++    BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
++
++  /* ── Primary Accent: Connaxis Orange ────────────────────── */
++  --affine-brand-color: #f09500;
++  --affine-primary-color: #f09500;
++  --affine-primary-color-04: rgba(240, 149, 0, 0.04);
++
++  /* ── v2 System: Accent ──────────────────────────────────── */
++  --affine-v2-button-primary: #f09500;
++  --affine-v2-database-focusBackground: rgba(240, 149, 0, 0.10);
++  --affine-v2-button-templateLabelBackground: rgba(240, 149, 0, 0.08);
++  --affine-v2-aI-applyTextHighlight: #f09500;
++  --affine-v2-aI-applyTextHighlightBackground: rgba(240, 149, 0, 0.08);
++
++  /* ── Hover: orange-tinted instead of blue ───────────────── */
++  --affine-hover-color: rgba(240, 149, 0, 0.06);
++}
++
++/* ── Font weight fine-tuning ─────────────────────────────── */
++body {
++  font-weight: 400;
++  letter-spacing: 0.01em;
++}
++
++/* ── Heading scale: navy vertical progression ───────────── */
++/* h1 darkest navy-black → h4 full Connaxis Navy #1b3a6b   */
++.affine-page-root h1,
++affine-paragraph[data-block-is-heading='h1'] .inline-editor,
++h1 { color: #0e1e38; font-weight: 700; }
++
++.affine-page-root h2,
++affine-paragraph[data-block-is-heading='h2'] .inline-editor,
++h2 { color: #12274a; font-weight: 700; }
++
++.affine-page-root h3,
++affine-paragraph[data-block-is-heading='h3'] .inline-editor,
++h3 { color: #16305c; font-weight: 700; }
++
++h4, h5, h6 { color: #1b3a6b; font-weight: 700; }
++
++/* AFFiNE editor heading blocks */
++[data-block-is-heading='h1'] { color: #0e1e38 !important; }
++[data-block-is-heading='h2'] { color: #12274a !important; }
++[data-block-is-heading='h3'] { color: #16305c !important; }
++
++/* ── Sidebar active item: orange tint ───────────────────── */
++/* Active nav item background */
++[data-active='true'] {
++  background-color: rgba(240, 149, 0, 0.10) !important;
++}
++/* Active nav item text/icon color */
++[data-active='true'] svg,
++[data-active='true'] span {
++  color: #f09500 !important;
++}
++/* Hover on nav items: subtle orange */
++[data-testid='explorer-item']:hover,
++[class*='menuItem']:hover,
++[class*='sidebarItem']:hover {
++  background-color: rgba(240, 149, 0, 0.06) !important;
++}
++
++/* ── Input autofill: keep default white ─────────────────── */
++input:-webkit-autofill {
++  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
++  -webkit-text-fill-color: #121212 !important;
++}
++
++/* ── Focus ring: orange instead of blue ─────────────────── */
++:focus-visible {
++  outline-color: #f09500 !important;
++}
++
++/* ── Selection highlight: orange tint ───────────────────── */
++::selection {
++  background-color: rgba(240, 149, 0, 0.20);
++}
+diff --git a/packages/frontend/component/src/theme/index.ts b/packages/frontend/component/src/theme/index.ts
+index 591cc37e62..f79444cd07 100644
+--- a/packages/frontend/component/src/theme/index.ts
++++ b/packages/frontend/component/src/theme/index.ts
+@@ -2,3 +2,4 @@ import '@toeverything/theme/style.css';
+ import './fonts.css';
+ import './global.css';
+ import './theme.css';
++import './connaxis.css';
+diff --git a/tools/cli/src/rspack-shared/template.html b/tools/cli/src/rspack-shared/template.html
+index 0eb14ef635..320a0d8f2b 100644
+--- a/tools/cli/src/rspack-shared/template.html
++++ b/tools/cli/src/rspack-shared/template.html
+@@ -14,32 +14,15 @@
+       content="black-translucent"
+     />
+ 
+-    <title>AFFiNE</title>
+-    <meta name="theme-color" content="#fafafa" />
++    <title>Connaxis Wiki</title>
++    <meta name="theme-color" content="#f9fae4" />
+     <%= PRECONNECT %>
+     <link rel="manifest" href="/manifest.json" />
+     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+-    <link rel="icon" sizes="192x192" href="/favicon-192.png" />
+-    <link rel="shortcut icon" href="/favicon.ico?v=2" />
++    <link rel="icon" sizes="192x192" href="/favicon-192.png?v=3" />
++    <link rel="shortcut icon" type="image/png" href="/favicon-192.png?v=3" />
+     <meta name="emotion-insertion-point" content="" />
+     <meta property="description" content="<%= DESCRIPTION %>" />
+-    <meta name="twitter:card" content="summary_large_image" />
+-    <meta name="twitter:url" content="https://app.affine.pro/" />
+-    <meta
+-      name="twitter:title"
+-      content="AFFiNE: There can be more than Notion and Miro."
+-    />
+-    <meta name="twitter:description" content="<%= DESCRIPTION %>" />
+-    <meta name="twitter:site" content="@AffineOfficial" />
+-    <meta name="twitter:image" content="https://affine.pro/og.jpeg" />
+-    <meta
+-      property="og:title"
+-      content="AFFiNE: There can be more than Notion and Miro."
+-    />
+-    <meta property="og:type" content="website" />
+-    <meta property="og:description" content="<%= DESCRIPTION %>" />
+-    <meta property="og:url" content="https://app.affine.pro/" />
+-    <meta property="og:image" content="https://affine.pro/og.jpeg" />
+   </head>
+ 
+   <body>
