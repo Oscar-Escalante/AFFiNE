@@ -725,7 +725,8 @@
       ],
       "proModels": [
         "claude-sonnet-4-6"
-      ]
+      ],
+      "maxTokens": 16000
     },
     "builtins": [
       "date",
