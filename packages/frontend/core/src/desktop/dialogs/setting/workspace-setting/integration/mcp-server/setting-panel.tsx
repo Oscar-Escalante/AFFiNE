@@ -58,7 +58,7 @@ const McpServerSetting = () => {
               [`affine_workspace_${workspaceService.workspace.id}`]: {
                 type: 'streamable-http',
                 url: `${serverService.server.baseUrl}/api/workspaces/${workspaceService.workspace.id}/mcp`,
-                note: `Read docs from AFFiNE workspace "${workspaceName}"`,
+                note: `Read docs from Connaxis workspace "${workspaceName}"`,
                 headers: {
                   Authorization: `Bearer ${revealedAccessToken.token}`,
                 },

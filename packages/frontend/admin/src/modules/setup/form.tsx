@@ -47,7 +47,7 @@ const SettingsDone = () => {
         All Settings Done
       </h1>
       <p className="mt-5 font-semibold text-xl max-lg:px-4 max-lg:text-lg">
-        AFFiNE is ready to use.
+        Connaxis is ready to use.
       </p>
     </div>
   );
@@ -209,7 +209,7 @@ export const Form = () => {
           </Button>
         )}
         <Button onClick={onNext} disabled={disableContinue}>
-          {current === count ? 'Open AFFiNE' : 'Continue'}
+          {current === count ? 'Open Connaxis' : 'Continue'}
         </Button>
       </div>
 

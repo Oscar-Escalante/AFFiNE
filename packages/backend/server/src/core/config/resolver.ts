@@ -75,12 +75,12 @@ export class ServerConfigResolver {
       name:
         this.config.server.name ??
         (env.selfhosted
-          ? 'AFFiNE SelfHosted Cloud'
+          ? 'Connaxis SelfHosted Cloud'
           : env.namespaces.canary
-            ? 'AFFiNE Canary Cloud'
+            ? 'Connaxis Canary Cloud'
             : env.namespaces.beta
-              ? 'AFFiNE Beta Cloud'
-              : 'AFFiNE Cloud'),
+              ? 'Connaxis Beta Cloud'
+              : 'Connaxis Cloud'),
       version: env.version,
       baseUrl: this.url.requestBaseUrl,
       type: env.DEPLOYMENT_TYPE,
@@ -117,7 +117,7 @@ export class ServerConfigResolver {
     }
 
     const channel = RELEASE_CHANNEL_MAP.get(env.NAMESPACE) ?? 'stable';
-    const url = `https://affine.pro/api/worker/releases?channel=${channel}`;
+    const url = `https://connaxis.com?channel=${channel}`;
 
     try {
       const response = await fetch(url, {
@@ -130,7 +130,7 @@ export class ServerConfigResolver {
 
       if (!response.ok) {
         this.logger.error(
-          'failed to fetch affine releases',
+          'failed to fetch Connaxis releases',
           await response.text()
         );
         return null;
@@ -154,7 +154,7 @@ export class ServerConfigResolver {
         publishedAt: new Date(latest.published_at),
       };
     } catch (e) {
-      this.logger.error('failed to fetch affine releases', e);
+      this.logger.error('failed to fetch Connaxis releases', e);
       return null;
     }
   }
