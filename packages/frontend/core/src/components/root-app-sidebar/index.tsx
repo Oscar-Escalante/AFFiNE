@@ -222,8 +222,8 @@ export const RootAppSidebar = memo((): ReactElement => {
         </MenuItem>
       </SidebarContainer>
       <SidebarScrollableContainer>
-        <NavigationPanelFavorites />
         <NavigationPanelOrganize />
+        <NavigationPanelFavorites />
         <NavigationPanelMigrationFavorites />
         <NavigationPanelTags />
         <NavigationPanelCollections />

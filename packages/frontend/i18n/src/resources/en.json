@@ -1203,7 +1203,7 @@
   "com.affine.rootAppSidebar.migration-data.help.clean-all": "Empty the old favorites",
   "com.affine.rootAppSidebar.migration-data.help.confirm": "OK",
   "com.affine.rootAppSidebar.migration-data.help.description": "<b>Your documents are safe</b>, but you'll need to re-pin your most-used ones. \"Favorites\" are now personal. Move items from the old shared section to your new personal section or remove the old one by clicking \"Empty the old favorites\" now.",
-  "com.affine.rootAppSidebar.organize": "Organize",
+  "com.affine.rootAppSidebar.organize": "Folders",
   "com.affine.rootAppSidebar.organize.delete": "Delete",
   "com.affine.rootAppSidebar.organize.delete-from-folder": "Remove from folder",
   "com.affine.rootAppSidebar.organize.delete.notify-message": "Delete the folder will not delete any docs, tags, or collections.",
