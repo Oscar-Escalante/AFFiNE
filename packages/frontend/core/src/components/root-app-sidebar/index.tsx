@@ -1,6 +1,7 @@
 import {
   AddPageButton,
   AppSidebar,
+  CategoryDivider,
   MenuItem,
   MenuLinkItem,
   QuickSearchInput,
@@ -16,7 +17,7 @@ import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import type { Store } from '@blocksuite/affine/store';
 import {
-  Files as AllDocsIcon,
+  Folder as FolderNavIcon,
   GearSix as SettingsIcon,
   ArrowSquareIn as ImportIcon,
   Robot as AiOutlineIcon,
@@ -30,7 +31,6 @@ import {
   NavigationPanelCollections,
   NavigationPanelFavorites,
   NavigationPanelMigrationFavorites,
-  NavigationPanelOrganize,
   NavigationPanelTags,
 } from '../../desktop/components/navigation-panel';
 import { WorkbenchService } from '../../modules/workbench';
@@ -65,22 +65,31 @@ export type RootAppSidebarProps = {
   };
 };
 
-const AllDocsButton = () => {
+const FoldersButton = () => {
   const t = useI18n();
-  const { workbenchService } = useServices({
-    WorkbenchService,
-  });
+  const { workbenchService } = useServices({ WorkbenchService });
   const workbench = workbenchService.workbench;
-  const allPageActive = useLiveData(
+  const active = useLiveData(
     workbench.location$.selector(location => location.pathname === '/all')
   );
 
   return (
-    <MenuLinkItem active={allPageActive} to={'/all'}>
-      <span data-testid="all-pages">
-        {t['com.affine.workspaceSubPath.all']()}
-      </span>
+    <MenuLinkItem icon={<FolderNavIcon weight="duotone" />} active={active} to={'/all'}>
+      <span>{t['com.affine.rootAppSidebar.organize']()}</span>
     </MenuLinkItem>
+  );
+};
+
+const AllDocsSection = () => {
+  const t = useI18n();
+  const { workbenchService } = useServices({ WorkbenchService });
+
+  return (
+    <CategoryDivider
+      data-testid="all-pages"
+      label={t['com.affine.workspaceSubPath.all']()}
+      onClick={() => workbenchService.workbench.open('/all')}
+    />
   );
 };
 
@@ -207,7 +216,7 @@ export const RootAppSidebar = memo((): ReactElement => {
           />
           <AddPageButton />
         </div>
-        <NavigationPanelOrganize />
+        <FoldersButton />
         <AIChatButton />
         <AppSidebarJournalButton />
         {sessionStatus === 'authenticated' && <NotificationButton />}
@@ -224,7 +233,7 @@ export const RootAppSidebar = memo((): ReactElement => {
       <SidebarScrollableContainer>
         <NavigationPanelFavorites />
         <NavigationPanelMigrationFavorites />
-        <AllDocsButton />
+        <AllDocsSection />
         <NavigationPanelTags />
         <NavigationPanelCollections />
         <CollapsibleSection

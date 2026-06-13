@@ -1,9 +1,9 @@
 # Connaxis Wiki — Change Migration Guide
 
 **Base upstream commit:** `7123595831 chore: bump deps (#15059)`  
-**Total Connaxis commits on top:** 49  
+**Total Connaxis commits on top:** 52  
 **Patch files:** `patches/` directory  
-**Last updated:** 2026-06-03
+**Last updated:** 2026-06-13
 
 This document describes every change made to the upstream AFFiNE codebase to produce Connaxis Wiki. Use this guide to reapply changes when upgrading to a newer upstream version.
 
@@ -459,10 +459,157 @@ Applied via both standard HTML selectors and AFFiNE's editor block selectors:
 
 ---
 
+---
+
+## Category 20 — Frontend: Rename AI Chat Tab (Intelligence → Knowledge)
+
+**Commit:** `c7fc2a6167`
+
+### `packages/frontend/i18n/src/resources/en.json`
+```diff
+- "com.affine.workspaceSubPath.chat": "Intelligence"
++ "com.affine.workspaceSubPath.chat": "Knowledge"
+```
+
+**Why:** "Intelligence" was the upstream AFFiNE label for the AI chat tab. "Knowledge" better fits the Connaxis context and brand voice.
+
+---
+
+## Category 21 — Frontend: Sidebar Navigation Restructure
+
+**Commits:** `cec01fd7ec` (Folders rename + initial reorder), `ba8bff28ca` (Folders to fixed area + icon + final reorder)
+
+### Overview of final sidebar layout
+
+**Fixed top area (icon buttons):**
+1. Search + Add page
+2. 📁 **Folders** (collapsible section, defaults to collapsed)
+3. 🧠 **Knowledge** (AI chat)
+4. 📓 Journal
+5. 🔔 Notifications
+6. ⚙️ Settings
+
+**Scrollable submenu:**
+1. Favorites
+2. All Docs (no icon — moved from fixed area)
+3. Tags
+4. Collections
+5. Others (Trash, Import…)
+
+### Files changed
+
+#### `packages/frontend/i18n/src/resources/en.json`
+```diff
+- "com.affine.rootAppSidebar.organize": "Organize"
++ "com.affine.rootAppSidebar.organize": "Folders"
+```
+
+#### `packages/frontend/core/src/components/root-app-sidebar/index.tsx`
+- Removed `<AllDocsButton />` from fixed `SidebarContainer`
+- Removed `icon={<AllDocsIcon weight="duotone" />}` from `AllDocsButton` render
+- Moved `<NavigationPanelOrganize />` from `SidebarScrollableContainer` → `SidebarContainer`, placed after search bar
+- Moved `<AIChatButton />` to just below `<NavigationPanelOrganize />` (before Journal)
+- Added `<AllDocsButton />` (now iconless) to `SidebarScrollableContainer` after Favorites
+
+#### `packages/frontend/core/src/modules/app-sidebar/views/category-divider/index.tsx`
+```diff
+- label: string;
++ label: ReactNode;   // + ReactNode import added
+```
+**Why:** Needed to support icon + text rendering inside the section header label.
+
+#### `packages/frontend/core/src/desktop/components/navigation-panel/layouts/collapsible-section.tsx`
+```diff
++ icon?: ReactNode;   // new optional prop
+```
+When `icon` is provided, passes `<>{icon}{title}</>` as the label to `CategoryDivider`. The `label` div already has `display: flex; align-items: center; gap: 2` so icons align automatically.
+
+#### `packages/frontend/core/src/desktop/components/navigation-panel/sections/organize/index.tsx`
+```diff
+- import { AddOrganizeIcon } from '@blocksuite/icons/rc';
++ import { AddOrganizeIcon, FolderIcon } from '@blocksuite/icons/rc';
+
+  <CollapsibleSection
+    path={path}
+    title={t['com.affine.rootAppSidebar.organize']()}
++   icon={<FolderIcon width={16} height={16} style={{ marginRight: 4, flexShrink: 0 }} />}
+```
+
+---
+
+## Category 22 — Infrastructure: Google Sheets → AFFiNE Wiki Sync
+
+**Location:** `packages/brand/google-sync/` (local) → deployed to `/home/sshadmin/apps/affine/google-sync/` on VPS
+
+This is a standalone Python sync script — **not part of the AFFiNE frontend/backend build**. It runs as a cron job on the VPS and writes directly to the AFFiNE PostgreSQL database.
+
+### What it does
+Reads a Google Sheet via the Sheets API (service account auth) and overwrites the Y.js snapshot of a designated AFFiNE wiki page with fresh content. Runs every 30 minutes via cron.
+
+### Files
+
+#### `packages/brand/google-sync/sync_sheet.py`
+Main script. Key functions:
+- `read_sheet()` — reads Google Sheet using `gspread` + service account JSON
+- `build_doc(title, records)` — generates a complete AFFiNE Y.js document binary using `pycrdt`:
+  - Creates `affine:page` → `affine:surface` + `affine:note` → `affine:paragraph` + `affine:divider` blocks
+  - First column of each row → `h3` heading; remaining columns → `"Campo: Valor"` text lines
+  - Skips empty column names and empty/zero values
+  - Prepends an auto-updated timestamp line
+- `update_affine_doc()` — upserts into `snapshots` table, deletes stale `updates` rows
+
+#### `packages/brand/google-sync/requirements.txt`
+```
+gspread>=6.0.0
+google-auth>=2.0.0
+psycopg2-binary>=2.9.0
+pycrdt>=0.9.0
+```
+
+#### `packages/brand/google-sync/.env.example`
+Config template (real `.env` lives only on VPS at `/home/sshadmin/apps/affine/google-sync/.env`):
+```env
+GOOGLE_SERVICE_ACCOUNT_FILE=/home/sshadmin/apps/affine/google-sync/service-account.json
+GOOGLE_SHEET_ID=12yW_zV35vz5W8s9vyErX8_-Wos2m7q0OaTPpKWH1DGQ
+GOOGLE_SHEET_TAB=Working groups
+AFFINE_WORKSPACE_ID=35a3579b-3f97-4813-b3d1-c9b8a8546cee
+AFFINE_DOC_ID=wr5nqDpS7kj-jafgnd6fk
+AFFINE_DOC_TITLE=Working Groups
+AFFINE_DB_URL=postgresql://affine_sync:...@127.0.0.1:5432/affine
+```
+
+#### `packages/brand/google-sync/setup.sh`
+One-time VPS setup: creates venv, installs deps, creates `affine_sync` PostgreSQL user with write access to `snapshots`, `updates`, `workspaces`, `workspace_admin_stats_dirty`, and registers cron job.
+
+### VPS state after setup
+- **Venv:** `/home/sshadmin/apps/affine/google-sync/venv/`
+- **Service account JSON:** `/home/sshadmin/apps/affine/google-sync/service-account.json` (permissions 600)
+- **Cron:** `*/30 * * * *` — runs as `sshadmin`, sources `.env`, logs to `sync.log`
+- **DB user:** `affine_sync` — GRANT SELECT/INSERT/UPDATE/DELETE on `snapshots`; DELETE on `updates`; SELECT on `workspaces` and `workspace_admin_stats_dirty`
+
+### Google Sheets setup
+- **Service account:** `wiki-connaxis@wiki-connaxis.iam.gserviceaccount.com`
+- **Sheet shared with service account** as Viewer
+- **Google Sheets API** enabled in project `wiki-connaxis` (project id `256075906422`)
+
+### Current sync target
+| Field | Value |
+|---|---|
+| Sheet | Working groups tab of the Connaxis contacts spreadsheet |
+| Wiki page | `wr5nqDpS7kj-jafgnd6fk` (Working Groups page) |
+| Workspace | `35a3579b-3f97-4813-b3d1-c9b8a8546cee` |
+
+### To add a new sheet sync
+1. Copy `.env.example` on VPS, set the new `GOOGLE_SHEET_ID`, `GOOGLE_SHEET_TAB`, `AFFINE_DOC_ID`, `AFFINE_DOC_TITLE`
+2. Share the new sheet with `wiki-connaxis@wiki-connaxis.iam.gserviceaccount.com`
+3. Add a new cron entry pointing to the script with the new env file
+
+---
+
 ## Pending / Future Work
 
-### Intelligence Tab (docSemanticSearch)
-**Status:** Non-functional — needs embedding API key.
+### Knowledge Tab (docSemanticSearch)
+**Status:** Non-functional — needs embedding API key. (Previously called "Intelligence Tab")
 
 To enable:
 1. In `packages/backend/server/src/plugins/copilot/runtime/task-policy.ts`:
@@ -483,6 +630,7 @@ To make the Docker image private:
 ### New Files
 - `.github/workflows/connaxis-build.yml`
 - `packages/brand/` (entire package)
+- `packages/brand/google-sync/` (VPS sync script — not part of AFFiNE build)
 - `packages/frontend/component/src/theme/connaxis.css` (brand theme override)
 
 ### Binary Files Changed
@@ -499,8 +647,18 @@ To make the Docker image private:
 - `packages/backend/server/src/plugins/oauth/service.ts`
 - `.github/deployment/node/Dockerfile`
 
-### Key Frontend Files (~30 files)
+### Key Frontend Files (~34 files)
 Most in `packages/frontend/core/src/` under: `blocksuite/ai/`, `components/`, `desktop/dialogs/`, `desktop/pages/`, `modules/`
+
+Notable sidebar files (Categories 20–21):
+- `packages/frontend/core/src/components/root-app-sidebar/index.tsx`
+- `packages/frontend/core/src/desktop/components/navigation-panel/layouts/collapsible-section.tsx`
+- `packages/frontend/core/src/desktop/components/navigation-panel/sections/organize/index.tsx`
+- `packages/frontend/core/src/modules/app-sidebar/views/category-divider/index.tsx`
 
 ### i18n Files (25 files)
 All locale files in `packages/frontend/i18n/src/resources/`
+
+Notable i18n changes (post-initial pass):
+- `"com.affine.workspaceSubPath.chat"`: `"Intelligence"` → `"Knowledge"`
+- `"com.affine.rootAppSidebar.organize"`: `"Organize"` → `"Folders"`
