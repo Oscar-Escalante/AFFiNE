@@ -22,7 +22,11 @@ import { NavigationPanelTreeRoot } from '../../tree';
 import { organizeChildrenDropEffect } from './dnd';
 import { RootEmpty } from './empty';
 
-export const NavigationPanelOrganize = () => {
+export const NavigationPanelOrganize = ({
+  noHeader = false,
+}: {
+  noHeader?: boolean;
+} = {}) => {
   const { organizeService, navigationPanelService } = useServices({
     OrganizeService,
     NavigationPanelService,
@@ -101,6 +105,37 @@ export const NavigationPanelOrganize = () => {
   useEffect(() => {
     if (collapsed) setNewFolderId(null); // reset new folder id to clear the renaming state
   }, [collapsed]);
+
+  if (noHeader) {
+    if (collapsed) return null;
+    return (
+      <NavigationPanelTreeRoot
+        placeholder={
+          <RootEmpty
+            onClickCreate={handleCreateFolder}
+            isLoading={isLoading}
+            onDrop={createFolderAndDrop}
+          />
+        }
+      >
+        {folders.map(child => (
+          <NavigationPanelFolderNode
+            key={child.id}
+            nodeId={child.id as string}
+            defaultRenaming={child.id === newFolderId}
+            onDrop={handleOnChildrenDrop}
+            dropEffect={organizeChildrenDropEffect}
+            canDrop={handleChildrenCanDrop}
+            location={{
+              at: 'navigation-panel:organize:folder-node',
+              nodeId: child.id as string,
+            }}
+            parentPath={path}
+          />
+        ))}
+      </NavigationPanelTreeRoot>
+    );
+  }
 
   return (
     <CollapsibleSection

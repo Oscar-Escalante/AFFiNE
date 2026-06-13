@@ -1,7 +1,6 @@
 import {
   AddPageButton,
   AppSidebar,
-  CategoryDivider,
   MenuItem,
   MenuLinkItem,
   QuickSearchInput,
@@ -24,15 +23,17 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
 import type { ReactElement } from 'react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import {
   CollapsibleSection,
   NavigationPanelCollections,
   NavigationPanelFavorites,
   NavigationPanelMigrationFavorites,
+  NavigationPanelOrganize,
   NavigationPanelTags,
 } from '../../desktop/components/navigation-panel';
+import { NavigationPanelService } from '../../modules/navigation-panel';
 import { WorkbenchService } from '../../modules/workbench';
 import { WorkspaceNavigator } from '../workspace-selector';
 import {
@@ -68,28 +69,48 @@ export type RootAppSidebarProps = {
 const FoldersButton = () => {
   const t = useI18n();
   const { workbenchService } = useServices({ WorkbenchService });
+  const navigationPanelService = useService(NavigationPanelService);
+  const workbench = workbenchService.workbench;
+  const path = useMemo(() => ['organize'], []);
+  const collapsed = useLiveData(navigationPanelService.collapsed$(path));
+  const active = useLiveData(
+    workbench.location$.selector(location => location.pathname === '/all')
+  );
+
+  const handleCollapsedChange = useCallback(
+    (v: boolean) => navigationPanelService.setCollapsed(path, v),
+    [navigationPanelService, path]
+  );
+
+  const handleClick = useCallback(() => {
+    workbench.open('/all');
+  }, [workbench]);
+
+  return (
+    <MenuItem
+      icon={<FolderNavIcon weight="duotone" />}
+      active={active}
+      collapsed={collapsed}
+      onCollapsedChange={handleCollapsedChange}
+      onClick={handleClick}
+    >
+      <span>{t['com.affine.rootAppSidebar.organize']()}</span>
+    </MenuItem>
+  );
+};
+
+const AllDocsButton = () => {
+  const t = useI18n();
+  const { workbenchService } = useServices({ WorkbenchService });
   const workbench = workbenchService.workbench;
   const active = useLiveData(
     workbench.location$.selector(location => location.pathname === '/all')
   );
 
   return (
-    <MenuLinkItem icon={<FolderNavIcon weight="duotone" />} active={active} to={'/all'}>
-      <span>{t['com.affine.rootAppSidebar.organize']()}</span>
+    <MenuLinkItem active={active} to={'/all'} data-testid="all-pages">
+      <span>{t['com.affine.workspaceSubPath.all']()}</span>
     </MenuLinkItem>
-  );
-};
-
-const AllDocsSection = () => {
-  const t = useI18n();
-  const { workbenchService } = useServices({ WorkbenchService });
-
-  return (
-    <CategoryDivider
-      data-testid="all-pages"
-      label={t['com.affine.workspaceSubPath.all']()}
-      onClick={() => workbenchService.workbench.open('/all')}
-    />
   );
 };
 
@@ -231,9 +252,10 @@ export const RootAppSidebar = memo((): ReactElement => {
         </MenuItem>
       </SidebarContainer>
       <SidebarScrollableContainer>
+        <NavigationPanelOrganize noHeader />
         <NavigationPanelFavorites />
         <NavigationPanelMigrationFavorites />
-        <AllDocsSection />
+        <AllDocsButton />
         <NavigationPanelTags />
         <NavigationPanelCollections />
         <CollapsibleSection
