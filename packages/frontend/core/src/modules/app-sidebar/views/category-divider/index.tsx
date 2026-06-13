@@ -1,12 +1,12 @@
 import { ToggleRightIcon } from '@blocksuite/icons/rc';
 import clsx from 'clsx';
-import { type ForwardedRef, forwardRef, type PropsWithChildren } from 'react';
+import { type ForwardedRef, forwardRef, type PropsWithChildren, type ReactNode } from 'react';
 
 import * as styles from './index.css';
 
 export type CategoryDividerProps = PropsWithChildren<
   {
-    label: string;
+    label: ReactNode;
     className?: string;
     collapsed?: boolean;
     setCollapsed?: (collapsed: boolean) => void;

@@ -12,7 +12,7 @@ import {
 import type { AffineDNDData } from '@affine/core/types/dnd';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
-import { AddOrganizeIcon } from '@blocksuite/icons/rc';
+import { AddOrganizeIcon, FolderIcon } from '@blocksuite/icons/rc';
 import { useLiveData, useServices } from '@toeverything/infra';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -106,6 +106,7 @@ export const NavigationPanelOrganize = () => {
     <CollapsibleSection
       path={path}
       title={t['com.affine.rootAppSidebar.organize']()}
+      icon={<FolderIcon width={16} height={16} style={{ marginRight: 4, flexShrink: 0 }} />}
       actions={
         <IconButton
           data-testid="navigation-panel-bar-add-organize-button"

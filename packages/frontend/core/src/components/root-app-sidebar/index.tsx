@@ -76,7 +76,7 @@ const AllDocsButton = () => {
   );
 
   return (
-    <MenuLinkItem icon={<AllDocsIcon weight="duotone" />} active={allPageActive} to={'/all'}>
+    <MenuLinkItem active={allPageActive} to={'/all'}>
       <span data-testid="all-pages">
         {t['com.affine.workspaceSubPath.all']()}
       </span>
@@ -207,10 +207,10 @@ export const RootAppSidebar = memo((): ReactElement => {
           />
           <AddPageButton />
         </div>
-        <AllDocsButton />
+        <NavigationPanelOrganize />
+        <AIChatButton />
         <AppSidebarJournalButton />
         {sessionStatus === 'authenticated' && <NotificationButton />}
-        <AIChatButton />
         <MenuItem
           data-testid="slider-bar-workspace-setting-button"
           icon={<SettingsIcon weight="duotone" />}
@@ -222,9 +222,9 @@ export const RootAppSidebar = memo((): ReactElement => {
         </MenuItem>
       </SidebarContainer>
       <SidebarScrollableContainer>
-        <NavigationPanelOrganize />
         <NavigationPanelFavorites />
         <NavigationPanelMigrationFavorites />
+        <AllDocsButton />
         <NavigationPanelTags />
         <NavigationPanelCollections />
         <CollapsibleSection
