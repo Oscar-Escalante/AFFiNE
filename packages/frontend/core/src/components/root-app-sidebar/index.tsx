@@ -99,20 +99,6 @@ const FoldersButton = () => {
   );
 };
 
-const AllDocsButton = () => {
-  const t = useI18n();
-  const { workbenchService } = useServices({ WorkbenchService });
-  const workbench = workbenchService.workbench;
-  const active = useLiveData(
-    workbench.location$.selector(location => location.pathname === '/all')
-  );
-
-  return (
-    <MenuLinkItem active={active} to={'/all'} data-testid="all-pages">
-      <span>{t['com.affine.workspaceSubPath.all']()}</span>
-    </MenuLinkItem>
-  );
-};
 
 const AIChatButton = () => {
   const t = useI18n();
@@ -238,6 +224,7 @@ export const RootAppSidebar = memo((): ReactElement => {
           <AddPageButton />
         </div>
         <FoldersButton />
+        <NavigationPanelOrganize noHeader />
         <AIChatButton />
         <AppSidebarJournalButton />
         {sessionStatus === 'authenticated' && <NotificationButton />}
@@ -252,10 +239,8 @@ export const RootAppSidebar = memo((): ReactElement => {
         </MenuItem>
       </SidebarContainer>
       <SidebarScrollableContainer>
-        <NavigationPanelOrganize noHeader />
         <NavigationPanelFavorites />
         <NavigationPanelMigrationFavorites />
-        <AllDocsButton />
         <NavigationPanelTags />
         <NavigationPanelCollections />
         <CollapsibleSection
