@@ -4,6 +4,7 @@ import {
   IconButton,
   toast,
 } from '@affine/component';
+import { MenuItem } from '@affine/core/modules/app-sidebar/views';
 import { NavigationPanelService } from '@affine/core/modules/navigation-panel';
 import {
   type FolderNode,
@@ -12,28 +13,29 @@ import {
 import type { AffineDNDData } from '@affine/core/types/dnd';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
-import { AddOrganizeIcon, FolderIcon } from '@blocksuite/icons/rc';
+import { AddOrganizeIcon } from '@blocksuite/icons/rc';
+import { Folder as FolderNavIcon } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useServices } from '@toeverything/infra';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { CollapsibleSection } from '../../layouts/collapsible-section';
 import { NavigationPanelFolderNode } from '../../nodes/folder';
 import { NavigationPanelTreeRoot } from '../../tree';
 import { organizeChildrenDropEffect } from './dnd';
 import { RootEmpty } from './empty';
 
-export const NavigationPanelOrganize = ({
-  noHeader = false,
-}: {
-  noHeader?: boolean;
-} = {}) => {
+export const NavigationPanelOrganize = () => {
   const { organizeService, navigationPanelService } = useServices({
     OrganizeService,
     NavigationPanelService,
   });
+
+  // path for folder node expand/collapse states (subfolder levels)
   const path = useMemo(() => ['organize'], []);
-  const collapsePath = useMemo(() => (noHeader ? ['folders'] : ['organize']), [noHeader]);
+
+  // separate path for this section's own collapse state; starts collapsed (true)
+  const collapsePath = useMemo(() => ['folders'], []);
   const collapsed = useLiveData(navigationPanelService.collapsed$(collapsePath));
+
   const [newFolderId, setNewFolderId] = useState<string | null>(null);
   const t = useI18n();
 
@@ -50,14 +52,14 @@ export const NavigationPanelOrganize = ({
     );
     track.$.navigationPanel.organize.createOrganizeItem({ type: 'folder' });
     setNewFolderId(newFolderId);
-    navigationPanelService.setCollapsed(path, false);
+    navigationPanelService.setCollapsed(collapsePath, false);
     return newFolderId;
-  }, [navigationPanelService, path, rootFolder]);
+  }, [navigationPanelService, collapsePath, rootFolder]);
 
   const handleOnChildrenDrop = useCallback(
     (data: DropTargetDropEvent<AffineDNDData>, node?: FolderNode) => {
       if (!node || !node.id) {
-        return; // never happens
+        return;
       }
       if (
         data.treeInstruction?.type === 'reorder-above' ||
@@ -74,8 +76,6 @@ export const NavigationPanelOrganize = ({
         } else {
           toast(t['com.affine.rootAppSidebar.organize.root-folder-only']());
         }
-      } else {
-        return; // not supported
       }
     },
     [rootFolder, t]
@@ -103,84 +103,63 @@ export const NavigationPanelOrganize = ({
     DropTargetOptions<AffineDNDData>['canDrop']
   >(() => args => args.source.data.entity?.type === 'folder', []);
 
+  const handleCollapsedChange = useCallback(
+    (v: boolean) => navigationPanelService.setCollapsed(collapsePath, v),
+    [navigationPanelService, collapsePath]
+  );
+
   useEffect(() => {
-    if (collapsed) setNewFolderId(null); // reset new folder id to clear the renaming state
+    if (collapsed) setNewFolderId(null);
   }, [collapsed]);
 
-  if (noHeader) {
-    if (collapsed) return null;
-    return (
-      <NavigationPanelTreeRoot
-        placeholder={
-          <RootEmpty
-            onClickCreate={handleCreateFolder}
-            isLoading={isLoading}
-            onDrop={createFolderAndDrop}
-          />
-        }
-      >
-        {folders.map(child => (
-          <NavigationPanelFolderNode
-            key={child.id}
-            nodeId={child.id as string}
-            defaultRenaming={child.id === newFolderId}
-            onDrop={handleOnChildrenDrop}
-            dropEffect={organizeChildrenDropEffect}
-            canDrop={handleChildrenCanDrop}
-            location={{
-              at: 'navigation-panel:organize:folder-node',
-              nodeId: child.id as string,
-            }}
-            parentPath={path}
-          />
-        ))}
-      </NavigationPanelTreeRoot>
-    );
-  }
-
   return (
-    <CollapsibleSection
-      path={path}
-      title={t['com.affine.rootAppSidebar.organize']()}
-      icon={<FolderIcon width={16} height={16} style={{ marginRight: 4, flexShrink: 0 }} />}
-      actions={
-        <IconButton
-          data-testid="navigation-panel-bar-add-organize-button"
-          onClick={handleCreateFolder}
-          size="16"
-          tooltip={t[
-            'com.affine.rootAppSidebar.explorer.organize-section-add-tooltip'
-          ]()}
-        >
-          <AddOrganizeIcon />
-        </IconButton>
-      }
-    >
-      <NavigationPanelTreeRoot
-        placeholder={
-          <RootEmpty
-            onClickCreate={handleCreateFolder}
-            isLoading={isLoading}
-            onDrop={createFolderAndDrop}
-          />
+    <>
+      <MenuItem
+        icon={<FolderNavIcon weight="duotone" />}
+        collapsed={collapsed}
+        onCollapsedChange={handleCollapsedChange}
+        postfix={
+          <IconButton
+            data-testid="navigation-panel-bar-add-organize-button"
+            onClick={handleCreateFolder}
+            size="16"
+            tooltip={t[
+              'com.affine.rootAppSidebar.explorer.organize-section-add-tooltip'
+            ]()}
+          >
+            <AddOrganizeIcon />
+          </IconButton>
         }
       >
-        {folders.map(child => (
-          <NavigationPanelFolderNode
-            key={child.id}
-            nodeId={child.id as string}
-            defaultRenaming={child.id === newFolderId}
-            onDrop={handleOnChildrenDrop}
-            dropEffect={organizeChildrenDropEffect}
-            canDrop={handleChildrenCanDrop}
-            location={{
-              at: 'navigation-panel:organize:folder-node',
-              nodeId: child.id as string,
-            }}
-            parentPath={path}
-          />
-        ))}
-      </NavigationPanelTreeRoot>
-    </CollapsibleSection>
+        <span>{t['com.affine.rootAppSidebar.organize']()}</span>
+      </MenuItem>
+      {!collapsed && (
+        <NavigationPanelTreeRoot
+          placeholder={
+            <RootEmpty
+              onClickCreate={handleCreateFolder}
+              isLoading={isLoading}
+              onDrop={createFolderAndDrop}
+            />
+          }
+        >
+          {folders.map(child => (
+            <NavigationPanelFolderNode
+              key={child.id}
+              nodeId={child.id as string}
+              defaultRenaming={child.id === newFolderId}
+              onDrop={handleOnChildrenDrop}
+              dropEffect={organizeChildrenDropEffect}
+              canDrop={handleChildrenCanDrop}
+              location={{
+                at: 'navigation-panel:organize:folder-node',
+                nodeId: child.id as string,
+              }}
+              parentPath={path}
+            />
+          ))}
+        </NavigationPanelTreeRoot>
+      )}
+    </>
   );
 };

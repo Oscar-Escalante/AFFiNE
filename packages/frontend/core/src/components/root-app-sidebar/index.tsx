@@ -16,14 +16,13 @@ import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
 import type { Store } from '@blocksuite/affine/store';
 import {
-  Folder as FolderNavIcon,
   GearSix as SettingsIcon,
   ArrowSquareIn as ImportIcon,
   Robot as AiOutlineIcon,
 } from '@phosphor-icons/react/dist/ssr';
 import { useLiveData, useService, useServices } from '@toeverything/infra';
 import type { ReactElement } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback } from 'react';
 
 import {
   CollapsibleSection,
@@ -33,7 +32,6 @@ import {
   NavigationPanelOrganize,
   NavigationPanelTags,
 } from '../../desktop/components/navigation-panel';
-import { NavigationPanelService } from '../../modules/navigation-panel';
 import { WorkbenchService } from '../../modules/workbench';
 import { WorkspaceNavigator } from '../workspace-selector';
 import {
@@ -67,38 +65,6 @@ export type RootAppSidebarProps = {
   };
 };
 
-const FoldersButton = () => {
-  const t = useI18n();
-  const { workbenchService } = useServices({ WorkbenchService });
-  const navigationPanelService = useService(NavigationPanelService);
-  const workbench = workbenchService.workbench;
-  const path = useMemo(() => ['folders'], []);
-  const collapsed = useLiveData(navigationPanelService.collapsed$(path));
-  const active = useLiveData(
-    workbench.location$.selector(location => location.pathname === '/all')
-  );
-
-  const handleCollapsedChange = useCallback(
-    (v: boolean) => navigationPanelService.setCollapsed(path, v),
-    [navigationPanelService, path]
-  );
-
-  const handleClick = useCallback(() => {
-    workbench.open('/all');
-  }, [workbench]);
-
-  return (
-    <MenuItem
-      icon={<FolderNavIcon weight="duotone" />}
-      active={active}
-      collapsed={collapsed}
-      onCollapsedChange={handleCollapsedChange}
-      onClick={handleClick}
-    >
-      <span>{t['com.affine.rootAppSidebar.organize']()}</span>
-    </MenuItem>
-  );
-};
 
 
 const AIChatButton = () => {
@@ -224,10 +190,9 @@ export const RootAppSidebar = memo((): ReactElement => {
           />
           <AddPageButton />
         </div>
-        <FoldersButton />
       </SidebarContainer>
       <div className={folderTreeSection}>
-        <NavigationPanelOrganize noHeader />
+        <NavigationPanelOrganize />
       </div>
       <SidebarContainer>
         <AIChatButton />
