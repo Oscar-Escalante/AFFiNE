@@ -1,5 +1,4 @@
 import {
-  AddPageButton,
   AppSidebar,
   MenuItem,
   MenuLinkItem,
@@ -188,7 +187,6 @@ export const RootAppSidebar = memo((): ReactElement => {
             data-event-props="$.navigationPanel.$.quickSearch"
             onClick={onOpenQuickSearchModal}
           />
-          <AddPageButton />
         </div>
       </SidebarContainer>
       <div className={folderTreeSection}>
