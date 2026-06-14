@@ -98,10 +98,10 @@ export const collapsedIconContainer = style({
   borderRadius: '2px',
   color: 'inherit',
   position: 'absolute',
-  inset: 0,
-  margin: 'auto',
+  left: 0,
+  top: '50%',
+  transform: 'translateY(-50%)',
   opacity: 0,
-  pointerEvents: 'none',
   transition: 'opacity 0.15s',
   selectors: {
     '&[data-disabled="true"]': {
@@ -113,7 +113,6 @@ export const collapsedIconContainer = style({
     },
     [`${root}:hover &`]: {
       opacity: 1,
-      pointerEvents: 'initial',
     },
   },
 });

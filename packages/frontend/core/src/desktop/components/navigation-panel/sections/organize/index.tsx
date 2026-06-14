@@ -118,6 +118,7 @@ export const NavigationPanelOrganize = () => {
         icon={<FolderNavIcon weight="duotone" />}
         collapsed={collapsed}
         onCollapsedChange={handleCollapsedChange}
+        onClick={() => handleCollapsedChange(!collapsed)}
         postfix={
           <IconButton
             data-testid="navigation-panel-bar-add-organize-button"
