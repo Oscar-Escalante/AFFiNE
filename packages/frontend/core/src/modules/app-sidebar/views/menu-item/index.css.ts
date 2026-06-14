@@ -37,7 +37,7 @@ export const root = style({
     //     'linear-gradient(0deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.04)), rgba(0, 0, 0, 0.04)',
     // },
     '&[data-collapsible="true"]': {
-      paddingLeft: '4px',
+      paddingLeft: '0px',
       paddingRight: '4px',
     },
     '&[data-collapsible="false"]:is([data-active="true"], :hover)': {

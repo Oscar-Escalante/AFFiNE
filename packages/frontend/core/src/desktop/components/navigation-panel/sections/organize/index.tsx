@@ -10,6 +10,7 @@ import {
   type FolderNode,
   OrganizeService,
 } from '@affine/core/modules/organize';
+import { WorkbenchService } from '@affine/core/modules/workbench';
 import type { AffineDNDData } from '@affine/core/types/dnd';
 import { useI18n } from '@affine/i18n';
 import { track } from '@affine/track';
@@ -24,10 +25,13 @@ import { organizeChildrenDropEffect } from './dnd';
 import { RootEmpty } from './empty';
 
 export const NavigationPanelOrganize = () => {
-  const { organizeService, navigationPanelService } = useServices({
-    OrganizeService,
-    NavigationPanelService,
-  });
+  const { organizeService, navigationPanelService, workbenchService } =
+    useServices({
+      OrganizeService,
+      NavigationPanelService,
+      WorkbenchService,
+    });
+  const workbench = workbenchService.workbench;
 
   // path for folder node expand/collapse states (subfolder levels)
   const path = useMemo(() => ['organize'], []);
@@ -118,7 +122,10 @@ export const NavigationPanelOrganize = () => {
         icon={<FolderNavIcon weight="duotone" />}
         collapsed={collapsed}
         onCollapsedChange={handleCollapsedChange}
-        onClick={() => handleCollapsedChange(!collapsed)}
+        onClick={() => {
+          handleCollapsedChange(!collapsed);
+          workbench.openAll();
+        }}
         postfix={
           <IconButton
             data-testid="navigation-panel-bar-add-organize-button"
