@@ -32,7 +32,8 @@ export const NavigationPanelOrganize = ({
     NavigationPanelService,
   });
   const path = useMemo(() => ['organize'], []);
-  const collapsed = useLiveData(navigationPanelService.collapsed$(path));
+  const collapsePath = useMemo(() => (noHeader ? ['folders'] : ['organize']), [noHeader]);
+  const collapsed = useLiveData(navigationPanelService.collapsed$(collapsePath));
   const [newFolderId, setNewFolderId] = useState<string | null>(null);
   const t = useI18n();
 

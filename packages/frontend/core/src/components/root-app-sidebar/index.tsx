@@ -72,7 +72,7 @@ const FoldersButton = () => {
   const { workbenchService } = useServices({ WorkbenchService });
   const navigationPanelService = useService(NavigationPanelService);
   const workbench = workbenchService.workbench;
-  const path = useMemo(() => ['organize'], []);
+  const path = useMemo(() => ['folders'], []);
   const collapsed = useLiveData(navigationPanelService.collapsed$(path));
   const active = useLiveData(
     workbench.location$.selector(location => location.pathname === '/all')

@@ -7,6 +7,7 @@ const DEFAULT_COLLAPSABLE_STATE: Record<string, boolean> = {
   recent: true,
   favorites: false,
   organize: false,
+  folders: true,
   collections: true,
   tags: true,
   favoritesOld: true,
