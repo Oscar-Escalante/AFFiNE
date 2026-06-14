@@ -31,3 +31,10 @@ export const workspaceWrapper = style({
 export const bottomContainer = style({
   gap: 8,
 });
+
+export const folderTreeSection = style({
+  flex: '0 1 auto',
+  minHeight: 0,
+  overflowY: 'auto',
+  padding: '0 14px',
+});

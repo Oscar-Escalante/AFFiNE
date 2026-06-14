@@ -38,6 +38,7 @@ import { WorkbenchService } from '../../modules/workbench';
 import { WorkspaceNavigator } from '../workspace-selector';
 import {
   bottomContainer,
+  folderTreeSection,
   quickSearch,
   quickSearchAndNewPage,
   workspaceAndUserWrapper,
@@ -224,7 +225,11 @@ export const RootAppSidebar = memo((): ReactElement => {
           <AddPageButton />
         </div>
         <FoldersButton />
+      </SidebarContainer>
+      <div className={folderTreeSection}>
         <NavigationPanelOrganize noHeader />
+      </div>
+      <SidebarContainer>
         <AIChatButton />
         <AppSidebarJournalButton />
         {sessionStatus === 'authenticated' && <NotificationButton />}
