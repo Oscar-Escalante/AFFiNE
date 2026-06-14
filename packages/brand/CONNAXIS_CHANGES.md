@@ -1,9 +1,9 @@
 # Connaxis Wiki — Change Migration Guide
 
 **Base upstream commit:** `7123595831 chore: bump deps (#15059)`  
-**Total Connaxis commits on top:** 52  
+**Total Connaxis commits on top:** 76  
 **Patch files:** `patches/` directory  
-**Last updated:** 2026-06-13
+**Last updated:** 2026-06-14
 
 This document describes every change made to the upstream AFFiNE codebase to produce Connaxis Wiki. Use this guide to reapply changes when upgrading to a newer upstream version.
 
@@ -477,24 +477,28 @@ Applied via both standard HTML selectors and AFFiNE's editor block selectors:
 
 ## Category 21 — Frontend: Sidebar Navigation Restructure
 
-**Commits:** `cec01fd7ec` (Folders rename + initial reorder), `ba8bff28ca` (Folders to fixed area + icon + final reorder)
+**Commits:** `cec01fd7ec` through `1a54621ed2` (multiple iterations — see final state below)
 
 ### Overview of final sidebar layout
 
-**Fixed top area (icon buttons):**
-1. Search + Add page
-2. 📁 **Folders** (collapsible section, defaults to collapsed)
-3. 🧠 **Knowledge** (AI chat)
-4. 📓 Journal
-5. 🔔 Notifications
-6. ⚙️ Settings
+**Fixed top area:**
+1. Search *(New Doc button removed)*
+2. 📁 **Folders** — collapses/expands folder tree inline; clicking also navigates to All Docs (`/all`)
+3. *(folder tree renders here when expanded — between Folders and Knowledge)*
+4. 🧠 **Knowledge** (AI chat)
+5. 📓 Journal
+6. 🔔 Notifications
+7. ⚙️ Settings
 
 **Scrollable submenu:**
 1. Favorites
-2. All Docs (no icon — moved from fixed area)
-3. Tags
-4. Collections
-5. Others (Trash, Import…)
+2. Tags
+3. Collections
+4. Others (Trash, Import…)
+
+**Removed entirely:** All Docs button, New Doc button from search area.
+
+---
 
 ### Files changed
 
@@ -504,36 +508,198 @@ Applied via both standard HTML selectors and AFFiNE's editor block selectors:
 + "com.affine.rootAppSidebar.organize": "Folders"
 ```
 
+---
+
 #### `packages/frontend/core/src/components/root-app-sidebar/index.tsx`
-- Removed `<AllDocsButton />` from fixed `SidebarContainer`
-- Removed `icon={<AllDocsIcon weight="duotone" />}` from `AllDocsButton` render
-- Moved `<NavigationPanelOrganize />` from `SidebarScrollableContainer` → `SidebarContainer`, placed after search bar
-- Moved `<AIChatButton />` to just below `<NavigationPanelOrganize />` (before Journal)
-- Added `<AllDocsButton />` (now iconless) to `SidebarScrollableContainer` after Favorites
+
+Final structure:
+```tsx
+<AppSidebar>
+  <SidebarContainer>
+    {/* workspace nav + user info */}
+    <div className={quickSearchAndNewPage}>
+      <QuickSearchInput ... />
+      {/* AddPageButton removed */}
+    </div>
+  </SidebarContainer>
+
+  {/* folder tree section — flex: 0 1 auto, grows/shrinks between fixed areas */}
+  <div className={folderTreeSection}>
+    <NavigationPanelOrganize />
+  </div>
+
+  <SidebarContainer>
+    <AIChatButton />           {/* Knowledge */}
+    <AppSidebarJournalButton />
+    <NotificationButton />
+    <MenuItem icon={<SettingsIcon />} onClick={onOpenSettingModal}>Settings</MenuItem>
+  </SidebarContainer>
+
+  <SidebarScrollableContainer>
+    <NavigationPanelFavorites />
+    <NavigationPanelMigrationFavorites />
+    <NavigationPanelTags />
+    <NavigationPanelCollections />
+    <CollapsibleSection path={['others']} ...>
+      <TrashButton /><MenuItem import /><InviteMembersButton /><TemplateDocEntrance />
+    </CollapsibleSection>
+  </SidebarScrollableContainer>
+
+  <SidebarContainer className={bottomContainer}>
+    <SidebarAudioPlayer />
+    {BUILD_CONFIG.isElectron ? <UpdaterButton /> : null}
+  </SidebarContainer>
+</AppSidebar>
+```
+
+Key removals: `AddPageButton`, `AllDocsButton`, `<NavigationPanelOrganize />` from ScrollableContainer.  
+Key imports removed: `AddPageButton`, `AllDocsButton`, `AllDocsIcon`, `FolderNavIcon`, `NavigationPanelService`, `useMemo`.
+
+---
+
+#### `packages/frontend/core/src/components/root-app-sidebar/index.css.ts`
+
+Added `folderTreeSection` — a flex child that sits between two `SidebarContainer` blocks and grows/shrinks with the tree without overflowing:
+
+```ts
+export const folderTreeSection = style({
+  flex: '0 1 auto',
+  minHeight: 0,
+  overflowY: 'auto',
+  padding: '0 14px',
+});
+```
+
+**Why:** `SidebarContainer` is `flex: 0 0 auto` (fixed height). Putting the folder tree inside it would overflow or push other items off-screen. This standalone div flexes to fit the tree content without affecting the fixed sidebar areas.
+
+---
+
+#### `packages/frontend/core/src/desktop/components/navigation-panel/sections/organize/index.tsx`
+
+Complete rewrite. Uses its own `MenuItem` header (instead of `CollapsibleSection`) so it can:
+- Render inline between two `SidebarContainer` blocks
+- Show hover-replace arrow (requires `onCollapsedChange` on `MenuItem`)
+- Navigate to `/all` AND toggle tree on click
+
+Key changes:
+- Uses **two separate collapse paths**: `['organize']` for subfolder node states, `['folders']` for the section's own visibility
+- `WorkbenchService` imported and used: `workbench.openAll()` called in `onClick`
+- All original features preserved: create folder (+), DnD, rename, subfolder operations
+
+```tsx
+import { WorkbenchService } from '@affine/core/modules/workbench';
+
+const { organizeService, navigationPanelService, workbenchService } = useServices({
+  OrganizeService, NavigationPanelService, WorkbenchService,
+});
+const workbench = workbenchService.workbench;
+
+const path = useMemo(() => ['organize'], []);        // subfolder node states
+const collapsePath = useMemo(() => ['folders'], []); // section visibility
+
+return (
+  <>
+    <MenuItem
+      icon={<FolderNavIcon weight="duotone" />}
+      collapsed={collapsed}
+      onCollapsedChange={handleCollapsedChange}
+      onClick={() => {
+        handleCollapsedChange(!collapsed);
+        workbench.openAll();   // navigate to All Docs
+      }}
+      postfix={<IconButton onClick={handleCreateFolder}>...</IconButton>}
+    >
+      <span>{t['com.affine.rootAppSidebar.organize']()}</span>
+    </MenuItem>
+    {!collapsed && (
+      <NavigationPanelTreeRoot ...>
+        {folders.map(child => <NavigationPanelFolderNode ... />)}
+      </NavigationPanelTreeRoot>
+    )}
+  </>
+);
+```
+
+---
+
+#### `packages/frontend/core/src/modules/navigation-panel/services/navigation-panel.ts`
+
+```diff
+  const DEFAULT_COLLAPSABLE_STATE: Record<string, boolean> = {
+    recent: true,
+    favorites: false,
+    organize: false,
++   folders: true,   // Folders section starts collapsed
+    collections: true,
+    tags: true,
+    favoritesOld: true,
+    migrationFavorites: true,
+    others: false,
+  };
+```
+
+---
+
+#### `packages/frontend/core/src/modules/app-sidebar/views/menu-item/index.css.ts`
+
+Two changes for hover-replace arrow behavior and icon alignment:
+
+**1. Icon hides on hover (replaced by arrow):**
+```ts
+export const icon = style({
+  color: cssVarV2('icon/primary'),
+  fontSize: '20px',
+  transition: 'opacity 0.15s',
+  selectors: {
+    [`${root}:hover [data-collapsible="true"] > &`]: { opacity: 0 }, // hide when parent hovered
+  },
+});
+```
+
+**2. Arrow: absolutely positioned, left-aligned, hidden by default, shows on hover:**
+```ts
+export const collapsedIconContainer = style({
+  width: '16px', height: '16px',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: '2px',
+  position: 'absolute',
+  left: 0,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  opacity: 0,                    // hidden by default
+  transition: 'opacity 0.15s',
+  selectors: {
+    '&[data-disabled="true"]': { opacity: 0.3, pointerEvents: 'none' },
+    '&:hover': { background: cssVarV2.layer.background.hoverOverlay },
+    [`${root}:hover &`]: { opacity: 1 },  // show on parent hover
+  },
+});
+```
+
+**3. Left padding removed from collapsible items to fix icon alignment:**
+```diff
+  '&[data-collapsible="true"]': {
+-   paddingLeft: '4px',
++   paddingLeft: '0px',
+    paddingRight: '4px',
+  },
+```
+**Why:** Other sidebar items (Journal, Knowledge, Settings) have `paddingLeft: 0`. The collapsible Folders item was shifted 4px right relative to them, causing visible misalignment.
+
+---
 
 #### `packages/frontend/core/src/modules/app-sidebar/views/category-divider/index.tsx`
 ```diff
 - label: string;
 + label: ReactNode;   // + ReactNode import added
 ```
-**Why:** Needed to support icon + text rendering inside the section header label.
 
 #### `packages/frontend/core/src/desktop/components/navigation-panel/layouts/collapsible-section.tsx`
 ```diff
-+ icon?: ReactNode;   // new optional prop
++ icon?: ReactNode;   // optional prop, passes <>{icon}{title}</> as label to CategoryDivider
 ```
-When `icon` is provided, passes `<>{icon}{title}</>` as the label to `CategoryDivider`. The `label` div already has `display: flex; align-items: center; gap: 2` so icons align automatically.
 
-#### `packages/frontend/core/src/desktop/components/navigation-panel/sections/organize/index.tsx`
-```diff
-- import { AddOrganizeIcon } from '@blocksuite/icons/rc';
-+ import { AddOrganizeIcon, FolderIcon } from '@blocksuite/icons/rc';
-
-  <CollapsibleSection
-    path={path}
-    title={t['com.affine.rootAppSidebar.organize']()}
-+   icon={<FolderIcon width={16} height={16} style={{ marginRight: 4, flexShrink: 0 }} />}
-```
+*(These two changes were part of an intermediate approach and are still present in the codebase, though no longer used by the Folders section.)*
 
 ---
 
@@ -652,9 +818,12 @@ Most in `packages/frontend/core/src/` under: `blocksuite/ai/`, `components/`, `d
 
 Notable sidebar files (Categories 20–21):
 - `packages/frontend/core/src/components/root-app-sidebar/index.tsx`
+- `packages/frontend/core/src/components/root-app-sidebar/index.css.ts`
 - `packages/frontend/core/src/desktop/components/navigation-panel/layouts/collapsible-section.tsx`
 - `packages/frontend/core/src/desktop/components/navigation-panel/sections/organize/index.tsx`
 - `packages/frontend/core/src/modules/app-sidebar/views/category-divider/index.tsx`
+- `packages/frontend/core/src/modules/app-sidebar/views/menu-item/index.css.ts`
+- `packages/frontend/core/src/modules/navigation-panel/services/navigation-panel.ts`
 
 ### i18n Files (25 files)
 All locale files in `packages/frontend/i18n/src/resources/`
