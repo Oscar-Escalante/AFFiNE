@@ -71,9 +71,23 @@ export const postfix = style({
     },
   },
 });
+export const iconsContainer = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-start',
+  width: '32px',
+  flexShrink: 0,
+  position: 'relative',
+});
 export const icon = style({
   color: cssVarV2('icon/primary'),
   fontSize: '20px',
+  transition: 'opacity 0.15s',
+  selectors: {
+    [`${root}:hover [data-collapsible="true"] > &`]: {
+      opacity: 0,
+    },
+  },
 });
 export const collapsedIconContainer = style({
   width: '16px',
@@ -82,12 +96,14 @@ export const collapsedIconContainer = style({
   alignItems: 'center',
   justifyContent: 'center',
   borderRadius: '2px',
-  transition: 'transform 0.2s',
   color: 'inherit',
+  position: 'absolute',
+  inset: 0,
+  margin: 'auto',
+  opacity: 0,
+  pointerEvents: 'none',
+  transition: 'opacity 0.15s',
   selectors: {
-    '&[data-collapsed="true"]': {
-      transform: 'rotate(-90deg)',
-    },
     '&[data-disabled="true"]': {
       opacity: 0.3,
       pointerEvents: 'none',
@@ -95,17 +111,9 @@ export const collapsedIconContainer = style({
     '&:hover': {
       background: cssVarV2.layer.background.hoverOverlay,
     },
-  },
-});
-export const iconsContainer = style({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-start',
-  width: '32px',
-  flexShrink: 0,
-  selectors: {
-    '&[data-collapsible="true"]': {
-      width: '44px',
+    [`${root}:hover &`]: {
+      opacity: 1,
+      pointerEvents: 'initial',
     },
   },
 });
