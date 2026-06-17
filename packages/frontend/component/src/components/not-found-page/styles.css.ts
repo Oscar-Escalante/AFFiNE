@@ -33,5 +33,5 @@ export const largeButtonEffect = style({
 
 export const illustration = style({
   maxWidth: '100%',
-  width: '670px',
+  width: '1054px',
 });

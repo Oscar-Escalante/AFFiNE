@@ -163,5 +163,5 @@ export const hideInSmallScreen = style({
 
 export const illustration = style({
   flexShrink: 0,
-  width: '670px',
+  width: '1054px',
 });
